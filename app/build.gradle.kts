@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose") // <-- required
+    id("org.jetbrains.kotlin.plugin.compose") // Compose compiler plugin
 }
 
 android {
@@ -18,8 +18,20 @@ android {
     }
 
     buildFeatures { compose = true }
-    // Keeping this is fine; plugin is still required.
+
+    // Keeping this is fine even with the compose plugin:
     composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
+
+    // Make Java compile with Java 17
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// Make Kotlin compile with Java 17
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {
@@ -29,11 +41,15 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.2")
+
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
     implementation("androidx.compose.material3:material3:1.3.0")
+
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
+
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 }
