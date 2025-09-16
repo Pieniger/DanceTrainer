@@ -1,6 +1,6 @@
-name: Build APK (no wrapper)
+name: Build APK (download Gradle)
 on:
-  workflow_dispatch: {}   # run manually
+  workflow_dispatch: {}
 
 jobs:
   build:
@@ -8,14 +8,6 @@ jobs:
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
-
-      # Optional: show what files are in your repo (helps debug paths)
-      - name: List files
-        run: |
-          pwd
-          ls -la
-          echo "---- app dir ----"
-          ls -la app || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -46,7 +38,6 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
-      # Build using the downloaded Gradle (not ./gradlew)
       - name: Build debug APK
         run: |
           gradle --version
