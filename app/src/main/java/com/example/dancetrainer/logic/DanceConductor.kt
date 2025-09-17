@@ -1,6 +1,6 @@
 package com.example.dancetrainer.logic
 
-import com.example.dancetrainer.data.*
+import com.example.dancetrainer.data.Move
 import kotlin.random.Random
 
 class DanceConductor {
@@ -11,31 +11,23 @@ class DanceConductor {
         currentSequence = emptyList()
     }
 
-    fun nextSingleMove(): Move? {
-        // pick a random move that has at least one connection
-        return sampleMoves().randomOrNull()
+    /** Returns a random move from a provided list; null if none. */
+    fun nextSingleMoveFrom(moves: List<Move>): Move? {
+        if (moves.isEmpty()) return null
+        return moves[Random.nextInt(moves.size)]
     }
 
-    fun generateRandomSequence() {
-        val moves = sampleMoves()
-        val length = Random.nextInt(3, 10)
-        currentSequence = List(length) { moves.random() }
+    fun nextSingleMove(): Move? = null // kept for backward calls; prefer nextSingleMoveFrom()
+
+    /** Generate a random sequence [3..10] from provided moves; empty if none. */
+    fun generateRandomSequenceFrom(moves: List<Move>, length: Int? = null) {
+        if (moves.isEmpty()) { currentSequence = emptyList(); return }
+        val n = length ?: (3..10).random()
+        currentSequence = List(n) { moves.random() }
     }
 
-    fun pickStoredSequence() {
-        // load from storage (stub for now, needs context in actual call)
-        currentSequence = listOf(
-            Move("1", "Sample Stored Move 1"),
-            Move("2", "Sample Stored Move 2")
-        )
-    }
+    fun generateRandomSequence() { currentSequence = emptyList() }
 
-    private fun sampleMoves(): List<Move> {
-        return listOf(
-            Move("1", "Step Left"),
-            Move("2", "Step Right"),
-            Move("3", "Spin"),
-            Move("4", "Jump")
-        )
-    }
+    /** Pick a stored sequence: for now stub as empty; real impl should load from storage. */
+    fun pickStoredSequence() { currentSequence = emptyList() }
 }
