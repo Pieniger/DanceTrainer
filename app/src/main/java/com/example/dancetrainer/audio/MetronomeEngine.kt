@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Handler
 import android.os.Looper
+import java.io.IOException
 
 class MetronomeEngine(private val context: Context) {
 
@@ -18,15 +19,23 @@ class MetronomeEngine(private val context: Context) {
                 .build()
         ).build()
 
-    // Load small WAVs from assets/sounds/
-    private val clickId: Int = context.assets.openFd("sounds/click.wav").use { afd -> soundPool.load(afd, 1) }
-    private val bellId: Int  = context.assets.openFd("sounds/bell.wav").use { afd -> soundPool.load(afd, 1) }
+    private var clickId: Int = 0
+    private var bellId: Int = 0
+
+    init {
+        // Try to load assets, but don't crash if missing
+        try {
+            clickId = context.assets.openFd("sounds/click.wav").use { afd -> soundPool.load(afd, 1) }
+        } catch (_: IOException) { clickId = 0 }
+        try {
+            bellId = context.assets.openFd("sounds/bell.wav").use { afd -> soundPool.load(afd, 1) }
+        } catch (_: IOException) { bellId = 0 }
+    }
 
     var bpm: Int = 100
     var accentEvery: Int = 4
     var countInBeats: Int = 0
 
-    /** Called on main thread after each beat index (0-based). */
     var onBeat: ((Long) -> Unit)? = null
 
     private var running = false
@@ -37,12 +46,14 @@ class MetronomeEngine(private val context: Context) {
             if (!running) return
             val isCountIn = beatIndex < countInBeats
             val isAccent = accentEvery > 0 && ((beatIndex + 1) % accentEvery == 0L)
-            val sample = if (isCountIn) clickId else if (isAccent) bellId else clickId
-            soundPool.play(sample, 1f, 1f, 1, 0, 1f)
-
+            val sample = when {
+                isCountIn -> clickId
+                isAccent && bellId != 0 -> bellId
+                else -> clickId
+            }
+            if (sample != 0) soundPool.play(sample, 1f, 1f, 1, 0, 1f)
             onBeat?.invoke(beatIndex)
             beatIndex++
-
             val delayMs = (60_000.0 / bpm).toLong().coerceAtLeast(50L)
             handler.postDelayed(this, delayMs)
         }
