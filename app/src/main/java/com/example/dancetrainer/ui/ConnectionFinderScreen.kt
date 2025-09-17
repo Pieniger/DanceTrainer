@@ -1,70 +1,69 @@
 package com.example.dancetrainer.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.dancetrainer.data.*
+import com.example.dancetrainer.Move
 import kotlin.random.Random
 
 @Composable
-fun ConnectionFinderScreen(onBack: () -> Unit) {
-    var move1 by remember { mutableStateOf<Move?>(null) }
-    var move2 by remember { mutableStateOf<Move?>(null) }
-    var smoothness by remember { mutableStateOf(3) }
-    var prioritizeInfrequent by remember { mutableStateOf(false) }
-
-    val sampleMoves = listOf(
-        Move("1", "Step Left"),
-        Move("2", "Step Right"),
-        Move("3", "Spin"),
-        Move("4", "Jump")
-    )
-
-    fun pickRandomPair() {
-        move1 = sampleMoves.random()
-        move2 = sampleMoves.filter { it.id != move1!!.id }.random()
+fun ConnectionFinderScreen(
+    padding: PaddingValues,
+    allMoves: List<Move>,
+    startMoveId: String?
+) {
+    // Origin = user-specified (from Manage -> Find Connection) or random
+    val origin = remember(startMoveId, allMoves) {
+        startMoveId?.let { id -> allMoves.firstOrNull { it.id == id } }
+            ?: allMoves.randomOrNull()
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Connection Finder", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(16.dp))
+    var candidate by remember(allMoves, origin) {
+        mutableStateOf(allMoves.filter { it.id != origin?.id }.randomOrNull())
+    }
 
-        Row {
-            Checkbox(checked = prioritizeInfrequent, onCheckedChange = { prioritizeInfrequent = it })
-            Text("Prioritize infrequent moves")
+    fun pickNewCandidate() {
+        candidate = allMoves.filter { it.id != origin?.id }.ifEmpty { emptyList() }.randomOrNull()
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Origin: ${origin?.name ?: "—"}")
+        Text("Candidate: ${candidate?.name ?: "—"}")
+        Divider()
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = {
+                    // TODO: record positive connection origin -> candidate (+smoothness prompt)
+                    pickNewCandidate()
+                },
+                enabled = origin != null && candidate != null
+            ) { Text("Yes (Connect)") }
+
+            Button(
+                onClick = {
+                    // TODO: record negative / not compatible
+                    pickNewCandidate()
+                },
+                enabled = origin != null && candidate != null
+            ) { Text("No / Skip") }
+
+            Button(onClick = { pickNewCandidate() }) { Text("New Pair") }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = { pickRandomPair() }) { Text("Find Pair") }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (move1 != null && move2 != null) {
-            Text("Move 1: ${'$'}{move1!!.name}")
-            Text("Move 2: ${'$'}{move2!!.name}")
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text("Smoothness:")
-            Row {
-                (1..5).forEach { i ->
-                    Button(onClick = { smoothness = i }) {
-                        Text(if (i <= smoothness) "❤️" else "🤍")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = { /* Save positive connection */ }) { Text("Yes") }
-                Button(onClick = { /* Save negative connection */ }) { Text("No") }
-            }
+        if (origin == null || allMoves.size < 2) {
+            Spacer(Modifier.height(8.dp))
+            Text("Tip: add at least 2 moves, then use Find Connection on a specific move.")
         }
-
-        Spacer(modifier = Modifier.weight(1f))
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
 }
