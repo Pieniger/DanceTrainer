@@ -5,38 +5,36 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavType
+import androidx.navigation.compose.*
 import com.example.dancetrainer.ui.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            App()
+            MaterialTheme {
+                AppNav()
+            }
         }
     }
 }
 
 @Composable
-fun App() {
-    var currentScreen = remember { mutableStateOf("menu") }
-
-    when (currentScreen.value) {
-        "menu" -> MainMenu(onNavigate = { currentScreen.value = it })
-        "settings" -> SettingsScreen(onBack = { currentScreen.value = "menu" })
-        "manage_moves" -> ManageMovesScreen(onBack = { currentScreen.value = "menu" })
-        "connection_finder" -> ConnectionFinderScreen(onBack = { currentScreen.value = "menu" })
-        "dance" -> DanceScreen(onBack = { currentScreen.value = "menu" })
-        "graph" -> GraphScreen(onBack = { currentScreen.value = "menu" })
-        "sequences" -> SequencesScreen(onBack = { currentScreen.value = "menu" })
-        else -> MainMenu(onNavigate = { currentScreen.value = it })
+fun AppNav() {
+    val nav = rememberNavController()
+    NavHost(navController = nav, startDestination = "menu") {
+        composable("menu") { MainMenuScreen(
+            onManageMoves = { nav.navigate("manage") },
+            onDance = { nav.navigate("dance") },
+            onSettings = { nav.navigate("settings") },
+            onSequences = { nav.navigate("sequences") },
+            onGraph = { nav.navigate("graph") }
+        )}
+        composable("manage") { ManageMovesScreen(onBack = { nav.popBackStack() }) }
+        composable("dance") { DanceScreen(onBack = { nav.popBackStack() }) }
+        composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
+        composable("sequences") { SequencesScreen(onBack = { nav.popBackStack() }) }
+        composable("graph") { GraphScreen(onBack = { nav.popBackStack() }) }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DefaultPreview() {
-    App()
 }
