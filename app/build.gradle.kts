@@ -60,6 +60,9 @@ dependencies {
     // Activity Compose
     implementation("androidx.activity:activity-compose:1.9.2")
 
+    
+    implementation("androidx.navigation:navigation-compose:2.8.0")
+
     // Kotlinx Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
