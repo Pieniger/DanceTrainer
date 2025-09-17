@@ -3,10 +3,8 @@ package com.example.dancetrainer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.navigation.NavType
-import androidx.navigation.compose.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.*
 import com.example.dancetrainer.ui.*
 
 class MainActivity : ComponentActivity() {
@@ -14,27 +12,32 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                AppNav()
+                AppRoot()
             }
         }
     }
 }
 
+private enum class Screen {
+    MENU, MANAGE, DANCE, SETTINGS, SEQUENCES, GRAPH
+}
+
 @Composable
-fun AppNav() {
-    val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = "menu") {
-        composable("menu") { MainMenuScreen(
-            onManageMoves = { nav.navigate("manage") },
-            onDance = { nav.navigate("dance") },
-            onSettings = { nav.navigate("settings") },
-            onSequences = { nav.navigate("sequences") },
-            onGraph = { nav.navigate("graph") }
-        )}
-        composable("manage") { ManageMovesScreen(onBack = { nav.popBackStack() }) }
-        composable("dance") { DanceScreen(onBack = { nav.popBackStack() }) }
-        composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
-        composable("sequences") { SequencesScreen(onBack = { nav.popBackStack() }) }
-        composable("graph") { GraphScreen(onBack = { nav.popBackStack() }) }
+private fun AppRoot() {
+    var screen by remember { mutableStateOf(Screen.MENU) }
+
+    when (screen) {
+        Screen.MENU -> MainMenuScreen(
+            onManageMoves = { screen = Screen.MANAGE },
+            onDance = { screen = Screen.DANCE },
+            onSettings = { screen = Screen.SETTINGS },
+            onSequences = { screen = Screen.SEQUENCES },
+            onGraph = { screen = Screen.GRAPH }
+        )
+        Screen.MANAGE -> ManageMovesScreen(onBack = { screen = Screen.MENU })
+        Screen.DANCE -> DanceScreen(onBack = { screen = Screen.MENU })
+        Screen.SETTINGS -> SettingsScreen(onBack = { screen = Screen.MENU })
+        Screen.SEQUENCES -> SequencesScreen(onBack = { screen = Screen.MENU })
+        Screen.GRAPH -> GraphScreen(onBack = { screen = Screen.MENU })
     }
 }
