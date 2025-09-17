@@ -2,7 +2,6 @@ package com.example.dancetrainer.ui
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.DocumentsContract
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,30 +44,29 @@ fun SettingsScreen(onBack: () -> Unit) {
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            // Persist access
-            val flags = (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             ctx.contentResolver.takePersistableUriPermission(uri, flags)
             Prefs.setTreeUri(ctx, uri.toString())
             treeUri = uri.toString()
-
-            // Refresh styles list for new base
             styles = Storage.listStyles(ctx)
         }
     }
 
-    // Init TTS and read voices
+    // ----- FIXED TTS INIT (no premature 'engine' reference) -----
     LaunchedEffect(Unit) {
         withContext(Dispatchers.Main) {
-            val engine = TextToSpeech(ctx) { status ->
+            var ref: TextToSpeech? = null
+            ref = TextToSpeech(ctx) { status ->
+                val e = ref ?: return@TextToSpeech
                 if (status == TextToSpeech.SUCCESS) {
-                    engine.language = Locale.getDefault()
-                    val voices = engine.voices?.toList()?.sortedBy { it.name } ?: emptyList()
+                    e.language = Locale.getDefault()
+                    // voices is a Set<Voice>; convert to list before sorting
+                    val voices = e.voices?.toList()?.sortedBy { it.name } ?: emptyList()
                     availableVoices = voices
-                    // If user had a saved voice, try to set it
-                    voices.firstOrNull { it.name == selectedVoiceName }?.let { engine.voice = it }
+                    voices.firstOrNull { it.name == selectedVoiceName }?.let { e.voice = it }
                 }
             }
-            tts = engine
+            tts = ref
         }
     }
 
@@ -82,7 +80,6 @@ fun SettingsScreen(onBack: () -> Unit) {
             OutlinedButton(onClick = { chooseFolderLauncher.launch(null) }) { Text("Choose folder") }
             if (treeUri != null) {
                 OutlinedButton(onClick = {
-                    // Clear to internal storage
                     Prefs.setTreeUri(ctx, null)
                     treeUri = null
                     styles = Storage.listStyles(ctx)
@@ -113,10 +110,14 @@ fun SettingsScreen(onBack: () -> Unit) {
 
         // --- Metronome ---
         Text("Metronome", style = MaterialTheme.typography.titleMedium)
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Switch(checked = metronomeEnabled, onCheckedChange = {
-                metronomeEnabled = it; Prefs.setMetronomeEnabled(ctx, it)
-            })
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Switch(
+                checked = metronomeEnabled,
+                onCheckedChange = { v -> metronomeEnabled = v; Prefs.setMetronomeEnabled(ctx, v) }
+            )
             Text(if (metronomeEnabled) "Enabled" else "Disabled")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -124,11 +125,16 @@ fun SettingsScreen(onBack: () -> Unit) {
             var expanded by remember { mutableStateOf(false) }
             OutlinedButton(onClick = { expanded = true }) { Text(if (metronomeSound == "bell") "Bell" else "Click") }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                DropdownMenuItem(text = { Text("Click") }, onClick = { metronomeSound = "click"; Prefs.setMetronomeSound(ctx, "click"); expanded = false })
-                DropdownMenuItem(text = { Text("Bell") }, onClick = { metronomeSound = "bell"; Prefs.setMetronomeSound(ctx, "bell"); expanded = false })
+                DropdownMenuItem(text = { Text("Click") }, onClick = {
+                    metronomeSound = "click"; Prefs.setMetronomeSound(ctx, "click"); expanded = false
+                })
+                DropdownMenuItem(text = { Text("Bell") }, onClick = {
+                    metronomeSound = "bell"; Prefs.setMetronomeSound(ctx, "bell"); expanded = false
+                })
             }
             OutlinedButton(onClick = {
-                tts?.speak(if (metronomeSound == "bell") "ding" else "tick", TextToSpeech.QUEUE_FLUSH, null, "metronome-preview")
+                tts?.speak(if (metronomeSound == "bell") "ding" else "tick",
+                    TextToSpeech.QUEUE_FLUSH, null, "metronome-preview")
             }) { Text("Preview") }
         }
 
@@ -136,8 +142,14 @@ fun SettingsScreen(onBack: () -> Unit) {
 
         // --- Voice (TTS) ---
         Text("Voice (TTS)", style = MaterialTheme.typography.titleMedium)
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Switch(checked = voiceEnabled, onCheckedChange = { voiceEnabled = it; Prefs.setVoiceEnabled(ctx, it) })
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Switch(
+                checked = voiceEnabled,
+                onCheckedChange = { v -> voiceEnabled = v; Prefs.setVoiceEnabled(ctx, v) }
+            )
             Text(if (voiceEnabled) "Enabled" else "Disabled")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -173,7 +185,11 @@ fun SettingsScreen(onBack: () -> Unit) {
             onDismissRequest = { showNewStyleDialog = false },
             title = { Text("Create new style") },
             text = {
-                OutlinedTextField(value = newStyleName, onValueChange = { newStyleName = it }, label = { Text("Style name") })
+                OutlinedTextField(
+                    value = newStyleName,
+                    onValueChange = { newStyleName = it },
+                    label = { Text("Style name") }
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
