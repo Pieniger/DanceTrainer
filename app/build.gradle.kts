@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // REQUIRED with Kotlin 2.0+ when compose = true
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
 }
 
@@ -40,7 +39,6 @@ android {
         compose = true
     }
 
-    // With Kotlin 2.0 + compose plugin, you do NOT need composeOptions.kotlinCompilerExtensionVersion
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -52,12 +50,15 @@ dependencies {
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.09.01"))
 
-    // Compose + Material3
+    // Compose + Material3 (Compose)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+
+    // **Material Components (provides Theme.Material3.* XML themes)**
+    implementation("com.google.android.material:material:1.12.0")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.8.0")
@@ -67,7 +68,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
 
-    // DocumentFile (optional convenience)
+    // DocumentFile (for SAF helpers)
     implementation("androidx.documentfile:documentfile:1.0.1")
 
     // Debug tools
