@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // REQUIRED with Kotlin 2.0+ when compose = true
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
 }
 
 android {
@@ -24,9 +26,6 @@ android {
                 "proguard-rules.pro"
             )
         }
-        debug {
-            // keep default
-        }
     }
 
     compileOptions {
@@ -40,10 +39,8 @@ android {
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
 
+    // With Kotlin 2.0 + compose plugin, you do NOT need composeOptions.kotlinCompilerExtensionVersion
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -55,14 +52,14 @@ dependencies {
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.09.01"))
 
-    // Compose core + Material3
+    // Compose + Material3
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Navigation for Compose
+    // Navigation
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
     // Activity & lifecycle
@@ -70,10 +67,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
 
-    // DocumentFile (for convenience with SAF if needed later)
+    // DocumentFile (optional convenience)
     implementation("androidx.documentfile:documentfile:1.0.1")
 
-    // DEBUG tools
+    // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
