@@ -5,113 +5,148 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.example.dancetrainer.Move
+
+// Simple in-memory model (replace with your real repository later)
+data class Move(val id: String, var name: String, var beats: Int = 4)
 
 @Composable
 fun ManageMovesScreen(
-    padding: PaddingValues,
-    moves: List<Move>,
-    onAdd: (name: String, beats: Int) -> Unit,
-    onEdit: (id: String, name: String, beats: Int) -> Unit,
-    onDelete: (id: String) -> Unit,
-    onFindConnection: (startMoveId: String) -> Unit
+    onBack: () -> Unit,
+    onFindConnectionForMove: (String) -> Unit
 ) {
-    var showDialog by remember { mutableStateOf(false) }
-    var editing: Move? by remember { mutableStateOf(null) }
+    // In real app, load from storage/repo
+    var moves by remember { mutableStateOf(sampleMoves().toMutableList()) }
 
-    Box(Modifier.fillMaxSize().padding(padding)) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            // Add button is at the top (visible and obvious)
-            Button(
-                onClick = { editing = null; showDialog = true },
-                modifier = Modifier.align(Alignment.End)
-            ) { Text("Add Move") }
+    var showAdd by remember { mutableStateOf(false) }
+    var showEditFor by remember { mutableStateOf<Move?>(null) }
 
-            Spacer(Modifier.height(12.dp))
-
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(moves, key = { it.id }) { m ->
-                    MoveRow(
-                        move = m,
-                        onEdit = { editing = m; showDialog = true },
-                        onDelete = { onDelete(m.id) },
-                        onFindConnection = { onFindConnection(m.id) }
-                    )
-                    Divider()
-                }
-            }
-        }
-
-        if (showDialog) {
-            val isEdit = editing != null
-            val initialName = editing?.name ?: ""
-            val initialBeats = (editing?.beats ?: 4).toString()
-
-            var name by remember(showDialog) { mutableStateOf(TextFieldValue(initialName)) }
-            var beatsText by remember(showDialog) { mutableStateOf(TextFieldValue(initialBeats)) }
-
-            AlertDialog(
-                onDismissRequest = { showDialog = false },
-                title = { Text(if (isEdit) "Edit Move" else "Add Move") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Name") },
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = beatsText,
-                            onValueChange = { beatsText = it },
-                            label = { Text("Beats (integer)") },
-                            singleLine = true
-                        )
-                    }
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(
+                title = { Text("Manage Moves") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("Back") }
                 },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val n = name.text.trim()
-                        val b = beatsText.text.toIntOrNull() ?: 4
-                        if (n.isNotEmpty()) {
-                            if (isEdit) {
-                                onEdit(editing!!.id, n, b)
-                            } else {
-                                onAdd(n, b)
-                            }
-                            showDialog = false
-                        }
-                    }) { Text("Save") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+                actions = {
+                    Button(onClick = { showAdd = true }) { Text("Add Move") }
                 }
             )
         }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (moves.isEmpty()) {
+                Text("No moves yet. Tap 'Add Move' to create one.")
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(moves, key = { it.id }) { move ->
+                        ElevatedCard {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(move.name, style = MaterialTheme.typography.titleMedium)
+                                    Text("Beats: ${move.beats}", style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = { showEditFor = move }) {
+                                        Text("Edit")
+                                    }
+                                    Button(onClick = { onFindConnectionForMove(move.id) }) {
+                                        Text("Find Connection")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAdd) {
+        MoveDialog(
+            title = "Add Move",
+            initialName = "",
+            initialBeats = 4,
+            onDismiss = { showAdd = false },
+            onConfirm = { name, beats ->
+                val new = Move(id = name.lowercase().replace("\\s+".toRegex(), "_"), name = name, beats = beats)
+                moves = (moves + new).toMutableList()
+                showAdd = false
+            }
+        )
+    }
+
+    showEditFor?.let { editing ->
+        MoveDialog(
+            title = "Edit Move",
+            initialName = editing.name,
+            initialBeats = editing.beats,
+            onDismiss = { showEditFor = null },
+            onConfirm = { name, beats ->
+                editing.name = name
+                editing.beats = beats
+                moves = moves.toMutableList() // trigger recomposition
+                showEditFor = null
+            }
+        )
     }
 }
 
 @Composable
-private fun MoveRow(
-    move: Move,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onFindConnection: () -> Unit
+private fun MoveDialog(
+    title: String,
+    initialName: String,
+    initialBeats: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int) -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(text = move.name, style = MaterialTheme.typography.titleMedium)
-            Text(text = "Beats: ${move.beats}", style = MaterialTheme.typography.bodyMedium)
+    var name by remember { mutableStateOf(TextFieldValue(initialName)) }
+    var beatsText by remember { mutableStateOf(TextFieldValue(initialBeats.toString())) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") }
+                )
+                OutlinedTextField(
+                    value = beatsText,
+                    onValueChange = { beatsText = it },
+                    label = { Text("Beats (int)") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val beats = beatsText.text.toIntOrNull() ?: 4
+                val trimmed = name.text.trim()
+                if (trimmed.isNotEmpty()) onConfirm(trimmed, beats) else onDismiss()
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
-        TextButton(onClick = onFindConnection) { Text("Find Connection") }
-        TextButton(onClick = onEdit) { Text("Edit") }
-        TextButton(onClick = onDelete) { Text("Delete") }
-    }
+    )
 }
+
+private fun sampleMoves(): List<Move> = listOf(
+    Move("step_touch", "Step Touch", 4),
+    Move("turn_left", "Turn Left", 4),
+    Move("turn_right", "Turn Right", 4),
+)
