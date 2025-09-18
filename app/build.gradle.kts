@@ -1,8 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -15,8 +13,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
-        vectorDrawables { useSupportLibrary = true }
+        vectorDrawables.useSupportLibrary = true
     }
 
     buildTypes {
@@ -27,53 +24,56 @@ android {
                 "proguard-rules.pro"
             )
         }
+        debug {
+            // keep default
+        }
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
+    }
 
-    // With Kotlin 2.0 + compose plugin, do NOT set kotlinCompilerExtensionVersion
     packaging {
-        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
 dependencies {
-    // Compose BOM to align artifacts
+    // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.09.01"))
 
-    // Compose UI + Material3
+    // Compose core + Material3
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Material Components (provides Theme.Material3.* XML themes)
-    implementation("com.google.android.material:material:1.12.0")
-
-    // Activity Compose
-    implementation("androidx.activity:activity-compose:1.9.2")
-
-    
+    // Navigation for Compose
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
-    // Kotlinx Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-
-    // SAF DocumentFile
-    implementation("androidx.documentfile:documentfile:1.0.1")
-
-    // KTX / Lifecycle
+    // Activity & lifecycle
+    implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
 
-    // Debug tooling
+    // DocumentFile (for convenience with SAF if needed later)
+    implementation("androidx.documentfile:documentfile:1.0.1")
+
+    // DEBUG tools
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
