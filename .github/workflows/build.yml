@@ -1,4 +1,4 @@
-name: Build APK (download Gradle)
+name: Build APK (no wrapper)
 
 on:
   workflow_dispatch:
@@ -19,28 +19,33 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      # Provision Gradle directly (so we can run `gradle ...` without ./gradlew)
+      - name: Set up Gradle 8.9
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.9
+          cache-read-only: false
 
-      - name: Show Gradle/Kotlin versions
+      - name: Show layout (debug)
         run: |
-          ./gradlew --version
-          echo "KOTLIN_OPTS='$KOTLIN_OPTS'"
+          pwd
+          ls -la
+          echo "----- app -----"
+          ls -la app || true
+          echo "----- res -----"
+          ls -la app/src/main/res || true
 
-      - name: Build debug APK with verbose logs
-        env:
-          # Make Kotlin compiler very chatty and print full errors
-          ORG_GRADLE_PROJECT_kotlin_daemon_debug: "true"
+      - name: Build debug APK (verbose)
         run: |
-          ./gradlew --no-daemon \
+          gradle --version
+          gradle --no-daemon \
             -Dorg.gradle.logging.stacktrace=full \
             -Dorg.gradle.warning.mode=all \
             --stacktrace --info \
             assembleDebug
 
-      - name: Upload APK (if built)
+      - name: Upload APK
         if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
