@@ -1,72 +1,42 @@
-name: Build APK (gradle-managed, with error digest)
+name: Build APK (quiet)
 
 on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
-  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # Use a managed Gradle instead of ./gradlew (since wrapper isn’t in repo)
-      - name: Set up Gradle 8.9
-        uses: gradle/gradle-build-action@v3
+      - uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.9
-          cache-read-only: false
 
-      - name: Show project layout (quick sanity check)
-        run: |
-          pwd
-          ls -la
-          echo "----- app -----"
-          ls -la app || true
-          echo "----- src/main/res -----"
-          ls -la app/src/main/res || true
-
-      - name: Build debug APK (capture full log)
+      - name: Build (quiet, capture log)
         id: build
         shell: bash
         run: |
           set -o pipefail
-          gradle --version | tee gradle-version.txt
-          # Build and tee to file so we can summarize errors after
-          gradle --no-daemon \
-            -Dorg.gradle.logging.stacktrace=full \
-            -Dorg.gradle.warning.mode=all \
-            --stacktrace --info \
-            assembleDebug 2>&1 | tee build.log
+          gradle --no-daemon --console=plain -q assembleDebug 2>&1 | tee build.log || echo "BUILD_FAIL" > .fail
 
-      - name: Error digest (Kotlin/AAPT)
-        if: ${{ failure() }}
+      - name: Error digest
+        if: ${{ hashFiles('.fail') != '' }}
         shell: bash
         run: |
-          echo "===== ERROR DIGEST START ====="
-          echo ""
-          echo "Top Kotlin compiler errors:"
-          grep -E "^e: file://|^e: " -m 40 build.log || true
-          echo ""
-          echo "AAPT/resource linking errors:"
-          grep -E "AAPT: error:|resource linking failed|/AndroidManifest.xml:" -m 40 build.log || true
-          echo ""
-          echo "Task failures:"
-          grep -E "> Task :app:[^ ]+ FAILED|Execution failed for task|What went wrong" -m 40 build.log || true
-          echo ""
-          echo "===== ERROR DIGEST END ====="
+          echo "===== ERROR DIGEST ====="
+          grep -E "^e: |AAPT: error:|resource linking failed|Execution failed for task|AndroidManifest.xml:" -m 80 build.log || true
+          echo "----- Last 60 lines -----"
+          tail -n 60 build.log || true
 
-      - name: Upload build artifacts (APK + logs)
+      - name: Upload outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -74,5 +44,4 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             build.log
-            gradle-version.txt
           if-no-files-found: warn
