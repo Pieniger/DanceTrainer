@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -15,7 +14,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.dancetrainer.ui.*
+import com.example.dancetrainer.ui.ConnectionFinderScreen
+import com.example.dancetrainer.ui.DanceScreen
+import com.example.dancetrainer.ui.GraphScreen
+import com.example.dancetrainer.ui.HomeScreen
+import com.example.dancetrainer.ui.ManageMovesScreen
+import com.example.dancetrainer.ui.SequenceScreen   // NOTE: singular to match your file name
+import com.example.dancetrainer.ui.SettingsScreen
 import com.example.dancetrainer.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -30,11 +35,7 @@ fun App() {
     AppTheme {
         val nav = rememberNavController()
         Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Dance Trainer", color = MaterialTheme.colorScheme.onPrimaryContainer) }
-                )
-            }
+            topBar = { TopAppBar(title = { Text("Dance Trainer") }) }
         ) { padding ->
             NavHost(
                 navController = nav,
@@ -61,7 +62,6 @@ fun App() {
                     )
                 }
 
-                // Optional startId param to start from a specific move
                 composable(
                     route = "finder?startId={startId}",
                     arguments = listOf(
@@ -80,7 +80,7 @@ fun App() {
                 }
 
                 composable("dance") { DanceScreen(onBack = { nav.popBackStack() }) }
-                composable("sequences") { SequencesScreen(onBack = { nav.popBackStack() }) }
+                composable("sequences") { SequenceScreen(onBack = { nav.popBackStack() }) } // <-- singular
                 composable("graph") { GraphScreen(onBack = { nav.popBackStack() }) }
                 composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
             }
