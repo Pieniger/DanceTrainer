@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
+    id("org.jetbrains.kotlin.plugin.compose") // no version here; managed in settings.gradle.kts
 }
 
 android {
@@ -34,9 +34,18 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    kotlin {
+        jvmToolchain(17)
+    }
 
     buildFeatures {
         compose = true
+    }
+
+    // Not strictly required when using the Kotlin Compose compiler plugin,
+    // but harmless to keep aligned with the BOM below.
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
 
     packaging {
@@ -50,14 +59,14 @@ dependencies {
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.09.01"))
 
-    // Compose + Material3 (Compose)
+    // Compose UI & Material3
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // **Material Components (provides Theme.Material3.* XML themes)**
+    // Material Components (provides Theme.Material3.* XML themes)
     implementation("com.google.android.material:material:1.12.0")
 
     // Navigation
@@ -66,9 +75,9 @@ dependencies {
     // Activity & lifecycle
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
 
-    // DocumentFile (for SAF helpers)
+    // DocumentFile
     implementation("androidx.documentfile:documentfile:1.0.1")
 
     // Debug tools
