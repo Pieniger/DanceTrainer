@@ -1,11 +1,16 @@
-// (what you already have)
 pluginManagement {
     repositories {
         gradlePluginPortal()
-@@ -10,12 +11,3 @@ pluginManagement {
+        google()
+        mavenCentral()
+    }
+    plugins {
+        id("com.android.application") version "8.6.1"
+        id("org.jetbrains.kotlin.android") version "2.0.20"
         id("org.jetbrains.kotlin.plugin.compose") version "2.0.20"
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -13,5 +18,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
+
 rootProject.name = "DanceTrainer"
 include(":app")
