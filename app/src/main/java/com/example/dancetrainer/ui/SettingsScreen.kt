@@ -1,6 +1,7 @@
 package com.example.dancetrainer.ui
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,8 +11,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallTopAppBar
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.menuAnchor
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -24,6 +42,7 @@ private object PrefsKeys {
     const val STORAGE_URI = "storage_uri"
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -34,13 +53,17 @@ fun SettingsScreen(onBack: () -> Unit) {
     var ttsSpeed by remember { mutableStateOf(prefs.getString(PrefsKeys.TTS_SPEED, "Default") ?: "Default") }
     var storageUri by remember { mutableStateOf(prefs.getString(PrefsKeys.STORAGE_URI, "") ?: "") }
 
-    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
         if (uri != null) {
-            // Persist permission
-            val flags = (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             try {
                 ctx.contentResolver.takePersistableUriPermission(uri, flags)
-            } catch (_: Exception) { /* ignore if not supported */ }
+            } catch (_: Exception) {
+                // Ignore if not supported or already persisted
+            }
 
             storageUri = uri.toString()
             prefs.edit().putString(PrefsKeys.STORAGE_URI, storageUri).apply()
@@ -98,7 +121,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             )
 
-            // TTS voice preview (placeholder — integrate real TTS later)
+            // TTS voice preview (placeholder — hook up your real TTS later)
             Button(onClick = {
                 Toast.makeText(ctx, "Playing TTS preview ($ttsSpeed)…", Toast.LENGTH_SHORT).show()
             }) {
@@ -107,7 +130,10 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             // Storage path selection
             ElevatedCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("Data Folder", style = MaterialTheme.typography.titleMedium)
                     Text(if (storageUri.isEmpty()) "No folder selected" else storageUri)
                     Button(onClick = { folderPicker.launch(null) }) {
@@ -119,6 +145,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DropdownSetting(
     label: String,
@@ -127,6 +154,7 @@ private fun DropdownSetting(
     onSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall)
         ExposedDropdownMenuBox(
@@ -138,9 +166,15 @@ private fun DropdownSetting(
                 onValueChange = {},
                 readOnly = true,
                 label = { Text(label) },
-                modifier = Modifier.menuAnchor()
+                modifier = Modifier.menuAnchor(),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                }
             )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            androidx.compose.material3.ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
                 options.forEach { opt ->
                     DropdownMenuItem(
                         text = { Text(opt) },
