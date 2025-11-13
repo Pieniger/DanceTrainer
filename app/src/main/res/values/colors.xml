@@ -1,3 +1,7 @@
 <resources>
+    <!-- Background color for the adaptive launcher icon -->
+    <color name="ic_launcher_background">#121212</color>
+
+    <!-- You can keep this or adjust as needed -->
     <color name="placeholder">#FFFFFFFF</color>
 </resources>
