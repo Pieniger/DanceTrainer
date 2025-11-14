@@ -1,22 +1,23 @@
 package com.example.dancetrainer.data
 
-import kotlinx.serialization.Serializable
+// Simple data models without kotlinx.serialization.
+// You can reintroduce serialization later if desired.
 
-@Serializable
 data class Move(
     val id: String,
     var name: String,
     var beats: Int = 4
 )
 
-@Serializable
 data class Connection(
     val from: String,
     val to: String,
     var smoothness: Int
 )
 
-@Serializable
+/**
+ * A saved sequence of moves.
+ */
 data class Sequence(
     val id: String,
     val name: String,
