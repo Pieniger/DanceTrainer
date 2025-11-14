@@ -4,16 +4,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DanceScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Dance") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
@@ -28,13 +36,17 @@ fun DanceScreen(onBack: () -> Unit) {
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Choose a mode and start dancing.",
-                style = MaterialTheme.typography.titleMedium)
-            // TODO: Hook up your real modes (One-at-a-time, Random Sequence, Sequence Loop)
+            Text(
+                "Choose a mode and start dancing.",
+                style = MaterialTheme.typography.titleMedium
+            )
             ElevatedCard(Modifier.fillMaxSize()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text("Placeholder dance area")
-                    Button(onClick = { /* regenerate random sequence */ }) {
+                    Button(onClick = { /* TODO: regenerate random sequence */ }) {
                         Text("Reload sequence")
                     }
                 }
