@@ -4,12 +4,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionFinderScreen(
     startMoveId: String?,
@@ -21,7 +26,7 @@ fun ConnectionFinderScreen(
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Connection Finder") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
@@ -36,7 +41,7 @@ fun ConnectionFinderScreen(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(startText, style = MaterialTheme.typography.titleMedium)
+            Text(startText)
             Text("This is the placeholder for the pairing UI.\n(Your existing logic can be plugged in here.)")
         }
     }
