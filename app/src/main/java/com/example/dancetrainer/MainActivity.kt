@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -19,7 +20,7 @@ import com.example.dancetrainer.ui.DanceScreen
 import com.example.dancetrainer.ui.GraphScreen
 import com.example.dancetrainer.ui.HomeScreen
 import com.example.dancetrainer.ui.ManageMovesScreen
-import com.example.dancetrainer.ui.SequenceScreen   // NOTE: singular to match your file name
+import com.example.dancetrainer.ui.SequenceScreen
 import com.example.dancetrainer.ui.SettingsScreen
 import com.example.dancetrainer.ui.theme.AppTheme
 
@@ -30,12 +31,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App() {
     AppTheme {
         val nav = rememberNavController()
         Scaffold(
-            topBar = { TopAppBar(title = { Text("Dance Trainer") }) }
+            topBar = {
+                TopAppBar(
+                    title = { Text("Dance Trainer") }
+                )
+            }
         ) { padding ->
             NavHost(
                 navController = nav,
@@ -62,6 +68,7 @@ fun App() {
                     )
                 }
 
+                // Optional startId for Connection Finder
                 composable(
                     route = "finder?startId={startId}",
                     arguments = listOf(
@@ -80,7 +87,7 @@ fun App() {
                 }
 
                 composable("dance") { DanceScreen(onBack = { nav.popBackStack() }) }
-                composable("sequences") { SequenceScreen(onBack = { nav.popBackStack() }) } // <-- singular
+                composable("sequences") { SequenceScreen(onBack = { nav.popBackStack() }) }
                 composable("graph") { GraphScreen(onBack = { nav.popBackStack() }) }
                 composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
             }
