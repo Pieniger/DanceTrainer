@@ -4,17 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.dancetrainer.ui.ConnectionFinderScreen
 import com.example.dancetrainer.ui.DanceScreen
 import com.example.dancetrainer.ui.GraphScreen
@@ -31,16 +28,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App() {
     AppTheme {
         val nav = rememberNavController()
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = { Text("Dance Trainer") }
-                )
+                TopAppBar(title = { Text("Dance Trainer") })
             }
         ) { padding ->
             NavHost(
@@ -62,34 +56,35 @@ fun App() {
                 composable("manage") {
                     ManageMovesScreen(
                         onBack = { nav.popBackStack() },
-                        onFindConnectionForMove = { moveId ->
-                            nav.navigate("finder?startId=$moveId")
+                        // We ignore the particular move for now and just open the global
+                        // ConnectionFinder, as per the new spec (random pairs).
+                        onFindConnectionForMove = { _ ->
+                            nav.navigate("finder")
                         }
                     )
                 }
 
-                // Optional startId for Connection Finder
-                composable(
-                    route = "finder?startId={startId}",
-                    arguments = listOf(
-                        navArgument("startId") {
-                            type = NavType.StringType
-                            nullable = true
-                            defaultValue = null
-                        }
-                    )
-                ) { backStackEntry ->
-                    val startId = backStackEntry.arguments?.getString("startId")
+                composable("finder") {
                     ConnectionFinderScreen(
-                        startMoveId = startId,
                         onBack = { nav.popBackStack() }
                     )
                 }
 
-                composable("dance") { DanceScreen(onBack = { nav.popBackStack() }) }
-                composable("sequences") { SequenceScreen(onBack = { nav.popBackStack() }) }
-                composable("graph") { GraphScreen(onBack = { nav.popBackStack() }) }
-                composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
+                composable("dance") {
+                    DanceScreen(onBack = { nav.popBackStack() })
+                }
+
+                composable("sequences") {
+                    SequenceScreen(onBack = { nav.popBackStack() })
+                }
+
+                composable("graph") {
+                    GraphScreen(onBack = { nav.popBackStack() })
+                }
+
+                composable("settings") {
+                    SettingsScreen(onBack = { nav.popBackStack() })
+                }
             }
         }
     }
