@@ -15,12 +15,16 @@ import java.io.File
  *
  * Inside that folder we keep:
  *  - moves.txt
- *  - connections.txt (future)
+ *  - connections.txt
  *  - sequences.txt   (future)
  *
- * Moves are stored as one move per line:
+ * Moves:
  *   id|name|notes
+ *
+ * Connections:
+ *   fromId|toId|smoothness
  */
+
 object Storage {
 
     // ---------- PATH RESOLUTION ----------
@@ -126,7 +130,7 @@ object Storage {
         }
     }
 
-    // ---------- MOVES (core for now) ----------
+    // ---------- MOVES ----------
 
     private const val MOVES_FILE = "moves.txt"
 
@@ -153,35 +157,68 @@ object Storage {
     }
 
     fun loadMoves(context: Context): List<Move> {
-        val text = loadText(context, MOVES_FILE) ?: return emptyList()
+        val text = loadText(context, MOVES_FILE)
+        if (text == null) {
+            // create an empty file for this style
+            saveMoves(context, emptyList())
+            return emptyList()
+        }
         return text
             .lineSequence()
             .mapNotNull { decodeMove(it) }
             .toList()
     }
 
-    // ---------- CONNECTIONS / SEQUENCES (stubs for now) ----------
+    // ---------- CONNECTIONS ----------
 
-    // You can flesh these out later the same way we did moves.
+    private const val CONNECTIONS_FILE = "connections.txt"
+
+    private fun encodeConnection(c: Connection): String {
+        return listOf(c.from, c.to, c.smoothness.toString()).joinToString("|")
+    }
+
+    private fun decodeConnection(line: String): Connection? {
+        if (line.isBlank()) return null
+        val parts = line.split("|")
+        if (parts.size < 3) return null
+        val from = parts[0]
+        val to = parts[1]
+        val smoothness = parts[2].toIntOrNull() ?: 0
+        return Connection(from = from, to = to, smoothness = smoothness)
+    }
 
     fun saveConnections(context: Context, connections: List<Connection>) {
-        // TODO: implement when we actually use connections persistence.
-        // For now: no-op to keep callers safe.
-        val unused = connections
-        unused.size // just to avoid "unused" warnings if referenced later
+        val content = connections.joinToString("\n") { encodeConnection(it) }
+        saveText(context, CONNECTIONS_FILE, content)
     }
 
     fun loadConnections(context: Context): List<Connection> {
-        // Placeholder until graph / connection logic is wired to storage.
-        return emptyList()
+        val text = loadText(context, CONNECTIONS_FILE)
+        if (text == null) {
+            // create an empty file for this style
+            saveConnections(context, emptyList())
+            return emptyList()
+        }
+        return text
+            .lineSequence()
+            .mapNotNull { decodeConnection(it) }
+            .toList()
     }
 
+    // ---------- SEQUENCES (placeholder for now) ----------
+
+    private const val SEQUENCES_FILE = "sequences.txt"
+
     fun saveSequences(context: Context, sequences: List<Sequence>) {
+        // Placeholder: implement similar to moves/connections once needed.
         val unused = sequences
         unused.size
+        // You could serialize as: id|name|difficulty|id1,id2,id3...
+        // and store in SEQUENCES_FILE.
     }
 
     fun loadSequences(context: Context): List<Sequence> {
+        // Placeholder for future use.
         return emptyList()
     }
 }
