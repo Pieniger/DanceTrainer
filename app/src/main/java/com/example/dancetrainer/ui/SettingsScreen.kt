@@ -36,40 +36,36 @@ import com.example.dancetrainer.data.Storage
 fun SettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    // --- TTS toggle (global setting) ---
+    // --- TTS toggle (only one feature flag) ---
     var ttsEnabled by remember {
         mutableStateOf(Prefs.isVoiceEnabled(ctx))
     }
 
-    // --- Base data folder (internal vs SAF) ---
+    // --- Base data folder (SAF tree or null -> internal) ---
     var treeUri by remember {
         mutableStateOf(Prefs.getTreeUri(ctx) ?: "")
     }
 
-    // --- Styles (subfolders of base folder) ---
+    // --- Styles = subfolders of current base folder ---
     var styles by remember {
         mutableStateOf(Storage.listStyles(ctx))
     }
 
+    // Currently selected style (just the folder name)
     var selectedStyle by remember {
-        mutableStateOf(
-            Prefs.getStyle(ctx).takeIf { it.isNotBlank() }
-                ?: styles.firstOrNull().orEmpty()
-        )
+        mutableStateOf(Prefs.getStyle(ctx))
     }
 
-    // Whenever selectedStyle changes, persist it and ensure JSON files exist
-    LaunchedEffect(selectedStyle) {
+    // When the screen first appears, make sure JSON files exist
+    LaunchedEffect(Unit) {
         if (selectedStyle.isNotBlank()) {
-            Prefs.setStyle(ctx, selectedStyle)
-            // These calls will create the JSON files if missing
             Storage.loadMoves(ctx)
             Storage.loadConnections(ctx)
             Storage.loadSequences(ctx)
         }
     }
 
-    // SAF folder picker
+    // SAF folder picker for the base data folder
     val folderPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
@@ -79,21 +75,26 @@ fun SettingsScreen(onBack: () -> Unit) {
             try {
                 ctx.contentResolver.takePersistableUriPermission(uri, flags)
             } catch (_: Exception) {
-                // Some devices may not support persistable permissions; ignore
+                // Some devices/flows won't support persistable permissions; ignore
             }
 
             treeUri = uri.toString()
             Prefs.setTreeUri(ctx, treeUri)
 
-            // Refresh styles for this new base folder
+            // Refresh styles based on this new base folder
             styles = Storage.listStyles(ctx)
-            selectedStyle = styles.firstOrNull().orEmpty()
-
-            if (selectedStyle.isNotBlank()) {
+            if (styles.isNotEmpty()) {
+                selectedStyle = styles.first()
                 Prefs.setStyle(ctx, selectedStyle)
                 Storage.loadMoves(ctx)
                 Storage.loadConnections(ctx)
                 Storage.loadSequences(ctx)
+            } else {
+                Toast.makeText(
+                    ctx,
+                    "No subfolders found. Create one per dance style.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -161,8 +162,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (styles.isEmpty()) {
                         Text(
                             "No style folders found.\n" +
-                                    "Create subfolders in the base folder (or internal styles base) " +
-                                    "to use them as styles.",
+                                    "Create subfolders in the base folder (or internal styles base)\n" +
+                                    "and they will appear here as selectable styles.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     } else {
@@ -179,13 +180,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         Storage.loadMoves(ctx)
                                         Storage.loadConnections(ctx)
                                         Storage.loadSequences(ctx)
-                                        Toast
-                                            .makeText(
-                                                ctx,
-                                                "Style switched to $styleName",
-                                                Toast.LENGTH_SHORT
-                                            )
-                                            .show()
+                                        Toast.makeText(
+                                            ctx,
+                                            "Style switched to $styleName",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 )
                                 Text(styleName)
