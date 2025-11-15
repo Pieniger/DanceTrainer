@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,7 +42,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var styles by remember { mutableStateOf(Storage.listStyles(ctx)) }
     var selectedStyle by remember {
         mutableStateOf(
-            Prefs.getStyle(ctx).takeIf { it.isNotBlank() } ?: styles.firstOrNull().orEmpty()
+            Prefs.getStyle(ctx).takeIf { it.isNotBlank() }
+                ?: styles.firstOrNull().orEmpty()
         )
     }
     var ttsEnabled by remember { mutableStateOf(Prefs.isVoiceEnabled(ctx)) }
@@ -66,7 +67,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
     }
 
-    // Whenever root or styles change, ensure selectedStyle is valid
+    // Whenever root changes, refresh styles and ensure we have a valid selectedStyle
     LaunchedEffect(treeUri) {
         styles = Storage.listStyles(ctx)
         if (styles.isNotEmpty()) {
@@ -97,4 +98,100 @@ fun SettingsScreen(onBack: () -> Unit) {
         ) {
             // Root folder card
             Card(
-                modifier = Modifier.fill
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Data Root Folder", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (treeUri.isNullOrEmpty())
+                            "No folder chosen yet."
+                        else
+                            treeUri!!
+                    )
+                    Button(onClick = { folderPicker.launch(null) }) {
+                        Text("Choose Folder")
+                    }
+                }
+            }
+
+            // Style selection card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Dance Style", style = MaterialTheme.typography.titleMedium)
+                    if (styles.isEmpty()) {
+                        Text(
+                            "No styles found. Create subfolders in the root directory " +
+                                    "(e.g. \"Lindy\", \"WCS\")."
+                        )
+                    } else {
+                        styles.forEach { style ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(style)
+                                val active = selectedStyle == style
+                                Button(
+                                    onClick = {
+                                        selectedStyle = style
+                                        Prefs.setStyle(ctx, style)
+                                        Storage.ensureFilesForStyle(ctx, style)
+                                        Toast.makeText(
+                                            ctx,
+                                            "Switched to style: $style",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    enabled = !active
+                                ) {
+                                    Text(if (active) "Active" else "Use")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // TTS toggle card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Voice Announcements", style = MaterialTheme.typography.titleMedium)
+                        Text("Use Text-to-Speech to announce moves.")
+                    }
+                    Switch(
+                        checked = ttsEnabled,
+                        onCheckedChange = {
+                            ttsEnabled = it
+                            Prefs.setVoiceEnabled(ctx, it)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
