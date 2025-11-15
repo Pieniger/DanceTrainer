@@ -55,18 +55,18 @@ fun DanceScreen(onBack: () -> Unit) {
     }
 
     /**
-     * Pick a NEXT move for [fromMove] using only positive connections (smoothness > 0).
+     * Pick a NEXT move for [sourceMove] using only positive connections (smoothness > 0).
      * If [excludeMoveId] is not null, we skip that target id (used for reroll).
      */
     fun pickNextFor(
-        fromMove: Move,
+        sourceMove: Move,
         moves: List<Move>,
         connections: List<Connection>,
         excludeMoveId: String? = null
     ): NextStep? {
         // All outgoing positive connections from this move
         val outgoing = connections.filter { conn ->
-            conn.from == fromMove.id && conn.smoothness > 0
+            conn.from == sourceMove.id && conn.smoothness > 0
         }
         if (outgoing.isEmpty()) return null
 
@@ -170,7 +170,7 @@ fun DanceScreen(onBack: () -> Unit) {
 
         val excludeId = existingNext?.id
         val nextStep = pickNextFor(
-            fromMove = current,
+            sourceMove = current,
             moves = moves,
             connections = connections,
             excludeMoveId = excludeId
