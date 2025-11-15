@@ -1,7 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose") // no version here; managed in settings.gradle.kts
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -42,8 +43,7 @@ android {
         compose = true
     }
 
-    // Not strictly required when using the Kotlin Compose compiler plugin,
-    // but harmless to keep aligned with the BOM below.
+    // OK to keep even with Kotlin 2.0 – aligns with BOM
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
@@ -66,7 +66,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Material Components (provides Theme.Material3.* XML themes)
+    // Material Components (for XML Theme.Material3.*)
     implementation("com.google.android.material:material:1.12.0")
 
     // Navigation
@@ -79,6 +79,9 @@ dependencies {
 
     // DocumentFile
     implementation("androidx.documentfile:documentfile:1.0.1")
+
+    // kotlinx.serialization JSON
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Debug tools
     debugImplementation("androidx.compose.ui:ui-tooling")
