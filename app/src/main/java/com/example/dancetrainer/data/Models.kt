@@ -1,22 +1,24 @@
 package com.example.dancetrainer.data
 
-import kotlinx.serialization.Serializable
+/**
+ * Core domain models.
+ *
+ * We keep them as plain data classes (no kotlinx.serialization) and
+ * handle persistence manually in Storage.kt.
+ */
 
-@Serializable
 data class Move(
     val id: String,
     var name: String,
     var notes: String = ""
 )
 
-@Serializable
 data class Connection(
     val from: String,
     val to: String,
     var smoothness: Int
 )
 
-@Serializable
 data class Sequence(
     val id: String,
     val name: String,
