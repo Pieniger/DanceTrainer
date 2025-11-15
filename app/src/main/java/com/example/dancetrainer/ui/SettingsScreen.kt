@@ -33,13 +33,13 @@ import com.example.dancetrainer.data.Storage
 fun SettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    // Data folder (SAF tree URI)
+    // Currently selected base folder (SAF tree URI)
     var treeUri by remember { mutableStateOf(Prefs.getTreeUri(ctx) ?: "") }
 
-    // Current style
+    // Current style name (saved in Prefs)
     var currentStyle by remember { mutableStateOf(Prefs.getStyle(ctx)) }
 
-    // Styles list from Storage (folders under "styles")
+    // Styles list from Storage (subfolders under base folder, or fallback)
     var styles by remember { mutableStateOf(listStylesSafe(ctx)) }
 
     // Folder picker (SAF)
@@ -52,13 +52,13 @@ fun SettingsScreen(onBack: () -> Unit) {
             try {
                 ctx.contentResolver.takePersistableUriPermission(uri, flags)
             } catch (_: Exception) {
-                // ignore if not supported
+                // Some devices / flows may not support persistable permission; ignore.
             }
 
             treeUri = uri.toString()
             Prefs.setTreeUri(ctx, treeUri)
 
-            // Reload styles from the new base folder
+            // After choosing a folder, rescan it for styles
             styles = listStylesSafe(ctx)
         }
     }
@@ -81,58 +81,51 @@ fun SettingsScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
 
-            // ---------- DATA FOLDER SECTION ----------
+            // ---------- DATA FOLDER ----------
             Text("Data Folder", style = MaterialTheme.typography.titleMedium)
             Text(
-                if (treeUri.isEmpty()) "No folder selected (using internal app storage)"
-                else treeUri,
+                if (treeUri.isEmpty()) {
+                    "No folder selected (using internal app storage)."
+                } else {
+                    treeUri
+                },
                 style = MaterialTheme.typography.bodySmall
             )
             Button(onClick = { folderPicker.launch(null) }) {
                 Text("Choose Data Folder")
             }
 
-            // ---------- DANCE STYLE SECTION ----------
+            // ---------- DANCE STYLE ----------
             Text("Dance Style", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Current style: $currentStyle",
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            if (styles.isEmpty()) {
-                Text(
-                    "No styles found yet. A \"Default\" style will be used until you create or add folders.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    styles.forEach { styleName ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = {
-                                currentStyle = styleName
-                                Prefs.setStyle(ctx, styleName)
-                            }) {
-                                Text(
-                                    if (styleName == currentStyle)
-                                        "$styleName (current)"
-                                    else
-                                        styleName
-                                )
-                            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                styles.forEach { styleName ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            currentStyle = styleName
+                            Prefs.setStyle(ctx, styleName)
+                        }) {
+                            Text(
+                                if (styleName == currentStyle)
+                                    "$styleName (current)"
+                                else
+                                    styleName
+                            )
                         }
                     }
                 }
-            }
 
-            // Optional: quick way to create a new style folder with a generic name
-            Button(onClick = {
-                val newName = "Style_${System.currentTimeMillis() % 10000}"
-                Storage.createStyle(ctx, newName)
-                styles = listStylesSafe(ctx)
-                currentStyle = newName
-                Prefs.setStyle(ctx, newName)
-            }) {
-                Text("Create New Style (auto-named)")
+                if (styles.isEmpty()) {
+                    Text(
+                        "No style folders found in the selected directory. " +
+                                "Create subfolders manually (one per style) and reopen this screen.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
@@ -140,6 +133,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
 /**
  * Helper to safely get styles list without crashing UI.
+ * Uses Storage.listStyles and falls back to ["Default"] on error.
  */
 private fun listStylesSafe(ctx: Context): List<String> =
     try {
