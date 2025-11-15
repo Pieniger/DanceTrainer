@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -28,6 +29,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App() {
     AppTheme {
@@ -56,8 +58,6 @@ fun App() {
                 composable("manage") {
                     ManageMovesScreen(
                         onBack = { nav.popBackStack() },
-                        // We ignore the particular move for now and just open the global
-                        // ConnectionFinder, as per the new spec (random pairs).
                         onFindConnectionForMove = { _ ->
                             nav.navigate("finder")
                         }
