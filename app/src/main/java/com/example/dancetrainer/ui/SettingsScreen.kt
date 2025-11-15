@@ -1,6 +1,5 @@
 package com.example.dancetrainer.ui
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -10,21 +9,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallTopAppBar
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,38 +32,37 @@ import androidx.compose.ui.unit.dp
 import com.example.dancetrainer.data.Prefs
 import com.example.dancetrainer.data.Storage
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    // ---- TTS toggle (use Prefs so it’s shared app-wide) ----
+    // --- TTS toggle (global setting) ---
     var ttsEnabled by remember {
         mutableStateOf(Prefs.isVoiceEnabled(ctx))
     }
 
-    // ---- Storage folder (SAF) ----
+    // --- Base data folder (internal vs SAF) ---
     var treeUri by remember {
         mutableStateOf(Prefs.getTreeUri(ctx) ?: "")
     }
 
-    // ---- Styles list + selection ----
+    // --- Styles (subfolders of base folder) ---
     var styles by remember {
         mutableStateOf(Storage.listStyles(ctx))
     }
 
     var selectedStyle by remember {
         mutableStateOf(
-            Prefs.getStyle(ctx).takeIf { it.isNotBlank() } ?: styles.firstOrNull().orEmpty()
+            Prefs.getStyle(ctx).takeIf { it.isNotBlank() }
+                ?: styles.firstOrNull().orEmpty()
         )
     }
 
-    // When we first enter the screen, if we have a style and styles list,
-    // make sure files for that style exist.
+    // Whenever selectedStyle changes, persist it and ensure JSON files exist
     LaunchedEffect(selectedStyle) {
         if (selectedStyle.isNotBlank()) {
             Prefs.setStyle(ctx, selectedStyle)
-            // Trigger creation of moves.json / connections.json / sequences.json
+            // These calls will create the JSON files if missing
             Storage.loadMoves(ctx)
             Storage.loadConnections(ctx)
             Storage.loadSequences(ctx)
@@ -85,16 +79,14 @@ fun SettingsScreen(onBack: () -> Unit) {
             try {
                 ctx.contentResolver.takePersistableUriPermission(uri, flags)
             } catch (_: Exception) {
-                // Some devices might not support persistable perms; ignore
+                // Some devices may not support persistable permissions; ignore
             }
 
             treeUri = uri.toString()
             Prefs.setTreeUri(ctx, treeUri)
 
-            // Refresh styles from new base folder
+            // Refresh styles for this new base folder
             styles = Storage.listStyles(ctx)
-
-            // Pick a reasonable default style from that folder, if any.
             selectedStyle = styles.firstOrNull().orEmpty()
 
             if (selectedStyle.isNotBlank()) {
@@ -108,7 +100,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
@@ -123,8 +115,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ---- TTS enabled switch ----
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // --- TTS enabled switch ---
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Switch(
                     checked = ttsEnabled,
                     onCheckedChange = {
@@ -135,18 +130,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Text("Text-to-Speech enabled")
             }
 
-            // ---- Storage folder card ----
-            ElevatedCard {
+            // --- Data Folder card ---
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("Data Folder", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (treeUri.isBlank())
-                            "Internal app storage (no folder selected)"
+                        text = if (treeUri.isBlank())
+                            "Internal app storage (no external folder selected)"
                         else
-                            treeUri
+                            treeUri,
+                        style = MaterialTheme.typography.bodySmall
                     )
                     Button(onClick = { folderPicker.launch(null) }) {
                         Text("Choose Folder")
@@ -154,8 +150,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            // ---- Style dropdown (read-only list of folders) ----
-            ElevatedCard {
+            // --- Style selection card ---
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -165,54 +161,34 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (styles.isEmpty()) {
                         Text(
                             "No style folders found.\n" +
-                                    "Create subfolders in your chosen data folder (or internal storage) " +
-                                    "to use them as styles."
+                                    "Create subfolders in the base folder (or internal styles base) " +
+                                    "to use them as styles.",
+                            style = MaterialTheme.typography.bodySmall
                         )
                     } else {
-                        var expanded by remember { mutableStateOf(false) }
-
-                        ExposedDropdownMenuBox(
-                            expanded = expanded,
-                            onExpandedChange = { expanded = !expanded }
-                        ) {
-                            OutlinedTextField(
-                                value = selectedStyle,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Current style") },
-                                modifier = Modifier
-                                    .menuAnchor(), // required for M3 exposed menu
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                                }
-                            )
-                            ExposedDropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false }
+                        styles.forEach { styleName ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                styles.forEach { styleName ->
-                                    DropdownMenuItem(
-                                        text = { Text(styleName) },
-                                        onClick = {
-                                            expanded = false
-                                            selectedStyle = styleName
-                                            Prefs.setStyle(ctx, styleName)
-
-                                            // Force creation of data files for this style
-                                            Storage.loadMoves(ctx)
-                                            Storage.loadConnections(ctx)
-                                            Storage.loadSequences(ctx)
-
-                                            Toast
-                                                .makeText(
-                                                    ctx,
-                                                    "Style switched to $styleName",
-                                                    Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                        }
-                                    )
-                                }
+                                RadioButton(
+                                    selected = styleName == selectedStyle,
+                                    onClick = {
+                                        selectedStyle = styleName
+                                        Prefs.setStyle(ctx, styleName)
+                                        Storage.loadMoves(ctx)
+                                        Storage.loadConnections(ctx)
+                                        Storage.loadSequences(ctx)
+                                        Toast
+                                            .makeText(
+                                                ctx,
+                                                "Style switched to $styleName",
+                                                Toast.LENGTH_SHORT
+                                            )
+                                            .show()
+                                    }
+                                )
+                                Text(styleName)
                             }
                         }
                     }
