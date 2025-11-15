@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.dancetrainer.MainActivity
 import com.example.dancetrainer.data.Move
 import com.example.dancetrainer.data.Prefs
 import com.example.dancetrainer.data.Storage
@@ -23,7 +24,7 @@ fun DanceScreen(onBack: () -> Unit) {
     var tts: TextToSpeech? by remember { mutableStateOf(null) }
     val ttsEnabled = remember { Prefs.isVoiceEnabled(ctx) }
 
-    // Init TTS
+    // Init / dispose TTS
     LaunchedEffect(ttsEnabled) {
         if (ttsEnabled) {
             tts = TextToSpeech(ctx) { status ->
@@ -93,7 +94,7 @@ fun DanceScreen(onBack: () -> Unit) {
 
         updateConnectionNote()
 
-        // ✔ Speak Next Move (move2) instead of move1
+        // Speak NEXT move (move2)
         speak(move2!!.name)
     }
 
@@ -107,8 +108,7 @@ fun DanceScreen(onBack: () -> Unit) {
             errorPopup = "Dead end! '${next.name}' has no valid follow-up.\nReturning to menu."
         } else {
             updateConnectionNote()
-
-            // ✔ Speak the NEW Next Move
+            // Speak new NEXT move
             speak(move2!!.name)
         }
     }
@@ -122,12 +122,35 @@ fun DanceScreen(onBack: () -> Unit) {
         } else {
             move2 = newNext
             updateConnectionNote()
-
-            // ✔ Speak new move2 on reroll
+            // Speak new move2 on reroll
             speak(newNext.name)
         }
     }
 
+    // Register Bluetooth / hardware key handler while this screen is visible
+    val nextKeyCode = remember { Prefs.getNextMoveKeyCode(ctx) }
+    val rerollKeyCode = remember { Prefs.getRerollKeyCode(ctx) }
+
+    DisposableEffect(nextKeyCode, rerollKeyCode) {
+        MainActivity.danceKeyHandler = { keyCode ->
+            when (keyCode) {
+                nextKeyCode -> {
+                    nextMove()
+                    true
+                }
+                rerollKeyCode -> {
+                    rerollMove2()
+                    true
+                }
+                else -> false
+            }
+        }
+        onDispose {
+            MainActivity.danceKeyHandler = null
+        }
+    }
+
+    // Start initial pair
     LaunchedEffect(Unit) {
         startSequence()
     }
@@ -158,7 +181,7 @@ fun DanceScreen(onBack: () -> Unit) {
                 return@Column
             }
 
-            // --- Current Move ---
+            // Current Move
             Text("Current move", style = MaterialTheme.typography.titleMedium)
             Text(
                 m1.name,
@@ -172,12 +195,12 @@ fun DanceScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(30.dp))
 
-            // --- Next Move (bigger) ---
+            // Next Move (bigger)
             Text("Next move", style = MaterialTheme.typography.titleMedium)
             Text(
                 m2.name,
                 fontWeight = FontWeight.Bold,
-                fontSize = (MaterialTheme.typography.headlineMedium.fontSize.value * 1.5).sp
+                fontSize = (MaterialTheme.typography.headlineMedium.fontSize.value * 1.5f).sp
             )
 
             Spacer(Modifier.height(40.dp))
