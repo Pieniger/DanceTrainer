@@ -10,8 +10,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.dancetrainer.data.Move
-import com.example.dancetrainer.data.Storage
 import com.example.dancetrainer.data.Prefs
+import com.example.dancetrainer.data.Storage
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,7 +22,7 @@ fun DanceScreen(onBack: () -> Unit) {
     var tts: TextToSpeech? by remember { mutableStateOf(null) }
     val ttsEnabled = remember { Prefs.isVoiceEnabled(ctx) }
 
-    // Initialize TTS if enabled
+    // Init / dispose TTS
     LaunchedEffect(ttsEnabled) {
         if (ttsEnabled) {
             tts = TextToSpeech(ctx) { status ->
@@ -36,20 +36,21 @@ fun DanceScreen(onBack: () -> Unit) {
         }
     }
 
-    // Load data for selected style
-    val style = Prefs.getStyle(ctx)
-    var moves by remember { mutableStateOf(Storage.loadMoves(ctx, style)) }
-    var connections by remember { mutableStateOf(Storage.loadConnections(ctx, style)) }
+    // Load data for current style (Storage already looks at Prefs.getStyle)
+    var moves by remember { mutableStateOf(Storage.loadMoves(ctx)) }
+    var connections by remember { mutableStateOf(Storage.loadConnections(ctx)) }
 
     // Current state
     var move1 by remember { mutableStateOf<Move?>(null) }
     var move2 by remember { mutableStateOf<Move?>(null) }
-    var connectionNote by remember { mutableStateOf<String>("") }
+    var connectionNote by remember { mutableStateOf("") }
 
     var errorPopup by remember { mutableStateOf<String?>(null) }
 
     fun speak(text: String) {
-        if (ttsEnabled) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "dance")
+        if (ttsEnabled) {
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "dance-${System.nanoTime()}")
+        }
     }
 
     fun pickRandomMove(except: Move? = null): Move? {
@@ -58,7 +59,6 @@ fun DanceScreen(onBack: () -> Unit) {
     }
 
     fun findNextMove(from: Move): Move? {
-        // Get all connections where from → another with positive smoothness
         val candidates = connections
             .filter { it.fromId == from.id && it.smoothness > 0 }
             .mapNotNull { c -> moves.find { it.id == c.toId } }
@@ -68,12 +68,17 @@ fun DanceScreen(onBack: () -> Unit) {
 
     fun updateConnectionNote() {
         connectionNote = if (move1 != null && move2 != null) {
-            val c = connections.find { it.fromId == move1!!.id && it.toId == move2!!.id }
-            c?.notes ?: ""
+            connections
+                .find { it.fromId == move1!!.id && it.toId == move2!!.id }
+                ?.notes.orEmpty()
         } else ""
     }
 
     fun startSequence() {
+        // Reload from disk in case style/files changed
+        moves = Storage.loadMoves(ctx)
+        connections = Storage.loadConnections(ctx)
+
         val first = pickRandomMove()
         if (first == null) {
             errorPopup = "No moves exist in this style!"
@@ -93,38 +98,36 @@ fun DanceScreen(onBack: () -> Unit) {
     }
 
     fun nextMove() {
-        if (move2 == null) return
+        val currentNext = move2 ?: return
 
-        move1 = move2
-        move2 = findNextMove(move1!!)
+        move1 = currentNext
+        move2 = findNextMove(currentNext)
 
         if (move2 == null) {
-            errorPopup = "Dead end! '${move1!!.name}' has no valid follow-up.\nReturning to menu."
-            return
+            errorPopup = "Dead end! '${currentNext.name}' has no valid follow-up.\nReturning to menu."
+        } else {
+            updateConnectionNote()
+            speak(currentNext.name)
         }
-
-        updateConnectionNote()
-        speak(move1!!.name)
     }
 
     fun rerollMove2() {
-        if (move1 == null) return
+        val base = move1 ?: return
 
-        move2 = findNextMove(move1!!)
-        if (move2 == null) {
-            errorPopup = "No valid follow-up moves for '${move1!!.name}'."
-            return
+        val newNext = findNextMove(base)
+        if (newNext == null) {
+            errorPopup = "No valid follow-up moves for '${base.name}'."
+        } else {
+            move2 = newNext
+            updateConnectionNote()
         }
-
-        updateConnectionNote()
     }
 
-    // Start automatically once
-    LaunchedEffect(style) {
+    // Start automatically once per composition
+    LaunchedEffect(Unit) {
         startSequence()
     }
 
-    // UI
     Scaffold(
         topBar = {
             TopAppBar(
@@ -143,31 +146,38 @@ fun DanceScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            val m1 = move1
+            val m2 = move2
 
-            if (move1 == null || move2 == null) {
-                Text("Loading...")
+            if (m1 == null || m2 == null) {
+                Text("Loading…")
                 return@Column
             }
 
-            Text("Current Move", style = MaterialTheme.typography.titleMedium)
-            Text(move1!!.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium)
+            Text("Current move", style = MaterialTheme.typography.titleMedium)
+            Text(
+                m1.name,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineMedium
+            )
 
             if (connectionNote.isNotBlank()) {
                 Text("Note: $connectionNote", style = MaterialTheme.typography.bodyMedium)
             }
 
-            Text("Next Move", style = MaterialTheme.typography.titleMedium)
-            Text(move2!!.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium)
+            Text("Next move", style = MaterialTheme.typography.titleMedium)
+            Text(
+                m2.name,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineMedium
+            )
 
             Spacer(Modifier.height(40.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Button(onClick = { nextMove() }) {
-                    Text("Next Move")
+                    Text("Next move")
                 }
-
                 Button(onClick = { rerollMove2() }) {
                     Text("Reroll")
                 }
@@ -175,15 +185,15 @@ fun DanceScreen(onBack: () -> Unit) {
         }
     }
 
-    // Dead-end popup
-    if (errorPopup != null) {
+    // Dead-end / error dialog
+    errorPopup?.let { msg ->
         AlertDialog(
             onDismissRequest = {
                 errorPopup = null
                 onBack()
             },
-            title = { Text("No Valid Move") },
-            text = { Text(errorPopup!!) },
+            title = { Text("No valid move") },
+            text = { Text(msg) },
             confirmButton = {
                 TextButton(
                     onClick = {
