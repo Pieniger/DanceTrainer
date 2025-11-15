@@ -1,40 +1,16 @@
 package com.example.dancetrainer.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.example.dancetrainer.data.Move
 import com.example.dancetrainer.data.Storage
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.ExperimentalMaterial3Api
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,31 +20,26 @@ fun ManageMovesScreen(
 ) {
     val ctx = LocalContext.current
 
-    var moves by remember { mutableStateOf(listOf<Move>()) }
-    var showAddDialog by remember { mutableStateOf(false) }
-    var editingMove by remember { mutableStateOf<Move?>(null) }
-
-    // Load moves on first composition
-    LaunchedEffect(Unit) {
-        moves = Storage.loadMoves(ctx)
+    var moves by remember {
+        mutableStateOf(Storage.loadMoves(ctx).toMutableList())
     }
 
-    fun persist(newList: List<Move>) {
-        moves = newList
-        Storage.saveMoves(ctx, newList)
+    fun persist() {
+        Storage.saveMoves(ctx, moves)
     }
+
+    var showAdd by remember { mutableStateOf(false) }
+    var showEditFor by remember { mutableStateOf<Move?>(null) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SmallTopAppBar(
                 title = { Text("Manage Moves") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
-                    Button(onClick = { showAddDialog = true }) {
-                        Text("Add Move")
-                    }
+                    Button(onClick = { showAdd = true }) { Text("Add Move") }
                 }
             )
         }
@@ -81,18 +52,11 @@ fun ManageMovesScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (moves.isEmpty()) {
-                Text(
-                    "No moves yet for this style.\nTap \"Add Move\" to create your first one.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text("No moves yet. Tap 'Add Move' to create one.")
             } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(moves, key = { it.id }) { move ->
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        ElevatedCard {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -103,32 +67,27 @@ fun ManageMovesScreen(
                                     move.name,
                                     style = MaterialTheme.typography.titleMedium
                                 )
-                                if (move.note.isNotBlank()) {
+                                if (move.notes.isNotBlank()) {
                                     Text(
-                                        move.note,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        move.notes,
+                                        style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
-
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        IconButton(onClick = { editingMove = move }) {
-                                            Icon(Icons.Default.Edit, contentDescription = "Edit")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { showEditFor = move }) {
+                                            Text("Edit")
                                         }
-                                        IconButton(onClick = {
-                                            val remaining = moves.filterNot { it.id == move.id }
-                                            persist(remaining)
+                                        OutlinedButton(onClick = {
+                                            moves = moves.filterNot { it.id == move.id }.toMutableList()
+                                            persist()
                                         }) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                            Text("Delete")
                                         }
                                     }
-
                                     Button(onClick = { onFindConnectionForMove(move.id) }) {
                                         Text("Find Connection")
                                     }
@@ -141,50 +100,62 @@ fun ManageMovesScreen(
         }
     }
 
-    // Add dialog
-    if (showAddDialog) {
+    if (showAdd) {
         MoveDialog(
             title = "Add Move",
             initialName = "",
-            initialNote = "",
-            onDismiss = { showAddDialog = false },
-            onConfirm = { name, note ->
-                val id = generateMoveId(name, moves)
-                val newMove = Move(id = id, name = name, note = note)
-                persist(moves + newMove)
-                showAddDialog = false
+            initialNotes = "",
+            onDismiss = { showAdd = false },
+            onConfirm = { name, notes ->
+                val baseId = name.lowercase().replace("\\s+".toRegex(), "_")
+                val uniqueId = generateUniqueId(baseId, moves)
+                val newMove = Move(
+                    id = uniqueId,
+                    name = name,
+                    notes = notes
+                )
+                moves = (moves + newMove).toMutableList()
+                persist()
+                showAdd = false
             }
         )
     }
 
-    // Edit dialog
-    editingMove?.let { move ->
+    showEditFor?.let { editing ->
         MoveDialog(
             title = "Edit Move",
-            initialName = move.name,
-            initialNote = move.note,
-            onDismiss = { editingMove = null },
-            onConfirm = { name, note ->
-                val updatedList = moves.map {
-                    if (it.id == move.id) it.copy(name = name, note = note) else it
-                }
-                persist(updatedList)
-                editingMove = null
+            initialName = editing.name,
+            initialNotes = editing.notes,
+            onDismiss = { showEditFor = null },
+            onConfirm = { name, notes ->
+                editing.name = name
+                editing.notes = notes
+                moves = moves.toMutableList() // trigger recomposition
+                persist()
+                showEditFor = null
             }
         )
     }
 }
 
+private fun generateUniqueId(base: String, moves: List<Move>): String {
+    if (moves.none { it.id == base }) return base
+    var i = 1
+    while (moves.any { it.id == "${base}_$i" }) i++
+    return "${base}_$i"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MoveDialog(
     title: String,
     initialName: String,
-    initialNote: String,
+    initialNotes: String,
     onDismiss: () -> Unit,
     onConfirm: (String, String) -> Unit
 ) {
     var name by remember { mutableStateOf(TextFieldValue(initialName)) }
-    var note by remember { mutableStateOf(TextFieldValue(initialNote)) }
+    var notes by remember { mutableStateOf(TextFieldValue(initialNotes)) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -194,49 +165,28 @@ private fun MoveDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth()
+                    label = { Text("Name") }
                 )
                 OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("Note (optional)") },
-                    modifier = Modifier.fillMaxWidth()
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes") },
+                    minLines = 3
                 )
             }
         },
         confirmButton = {
             Button(onClick = {
-                val trimmedName = name.text.trim()
-                val trimmedNote = note.text.trim()
-                if (trimmedName.isNotEmpty()) {
-                    onConfirm(trimmedName, trimmedNote)
+                val trimmed = name.text.trim()
+                if (trimmed.isNotEmpty()) {
+                    onConfirm(trimmed, notes.text.trim())
                 } else {
                     onDismiss()
                 }
-            }) {
-                Text("Save")
-            }
+            }) { Text("Save") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
-}
-
-private fun generateMoveId(name: String, existing: List<Move>): String {
-    val base = name
-        .lowercase()
-        .trim()
-        .replace("\\s+".toRegex(), "_")
-        .replace("[^a-z0-9_]+".toRegex(), "")
-
-    if (existing.none { it.id == base }) return base
-    var i = 2
-    while (existing.any { it.id == "${base}_$i" }) {
-        i++
-    }
-    return "${base}_$i"
 }
