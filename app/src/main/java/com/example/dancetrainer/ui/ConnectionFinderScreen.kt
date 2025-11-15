@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -22,7 +23,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,33 +36,27 @@ import com.example.dancetrainer.data.Move
 import com.example.dancetrainer.data.Storage
 import kotlin.random.Random
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionFinderScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
 
-    // Load moves + connections for the currently selected style.
     var moves by remember { mutableStateOf(Storage.loadMoves(context)) }
     var connections by remember { mutableStateOf(Storage.loadConnections(context).toMutableList()) }
 
-    // The current displayed pair.
     var currentFrom by remember { mutableStateOf<Move?>(null) }
     var currentTo by remember { mutableStateOf<Move?>(null) }
 
-    // Pairs we've already evaluated (works OR doesn't work) in this session
-    // plus all existing saved connections so we don't re-propose them.
     var triedPairs by remember { mutableStateOf(setOf<Pair<String, String>>()) }
 
-    // Small status / info line.
     var infoMessage by remember { mutableStateOf<String?>(null) }
 
-    // Dialog state for rating a "works" connection.
     var showRateDialog by remember { mutableStateOf(false) }
     var pendingFrom by remember { mutableStateOf<Move?>(null) }
     var pendingTo by remember { mutableStateOf<Move?>(null) }
 
-    // Initial setup: mark existing connections as tried, then pick first random pair.
     LaunchedEffect(Unit) {
         val existing = connections.map { it.from to it.to }.toSet()
         triedPairs = existing
@@ -100,7 +94,6 @@ fun ConnectionFinderScreen(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Current pair card
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -142,7 +135,6 @@ fun ConnectionFinderScreen(
                             Button(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    // "Works" → open rating dialog
                                     pendingFrom = currentFrom
                                     pendingTo = currentTo
                                     showRateDialog = true
@@ -154,8 +146,6 @@ fun ConnectionFinderScreen(
                             Button(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    // "Doesn't work" → mark this pair tried, keep move 1,
-                                    // and pick a new move 2 that hasn't been tried with move 1.
                                     val from = currentFrom
                                     val to = currentTo
                                     if (from != null && to != null) {
@@ -180,7 +170,6 @@ fun ConnectionFinderScreen(
                             OutlinedButton(
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    // "Reroll" → pick a completely new pair.
                                     pickRandomPair(
                                         moves = moves,
                                         triedPairs = triedPairs,
@@ -201,7 +190,6 @@ fun ConnectionFinderScreen(
                 }
             }
 
-            // Info / status text
             infoMessage?.let { msg ->
                 Text(
                     text = msg,
@@ -219,7 +207,6 @@ fun ConnectionFinderScreen(
         }
     }
 
-    // Rating dialog when user presses "Works"
     if (showRateDialog && pendingFrom != null && pendingTo != null) {
         RateConnectionDialog(
             from = pendingFrom!!,
@@ -232,8 +219,11 @@ fun ConnectionFinderScreen(
             onSave = { smoothness, note ->
                 val from = pendingFrom!!
                 val to = pendingTo!!
-                // Remove any existing connection with same from/to
-                val updated = connections.filterNot { it.from == from.id && it.to == to.id }.toMutableList()
+
+                val updated = connections
+                    .filterNot { it.from == from.id && it.to == to.id }
+                    .toMutableList()
+
                 updated += Connection(
                     from = from.id,
                     to = to.id,
@@ -243,10 +233,8 @@ fun ConnectionFinderScreen(
                 connections = updated
                 Storage.saveConnections(context, connections)
 
-                // Mark this pair as tried
                 triedPairs = triedPairs + (from.id to to.id)
 
-                // Now continue from move 2 → move 1 becomes old move 2
                 pickRandomPair(
                     moves = moves,
                     triedPairs = triedPairs,
@@ -360,14 +348,6 @@ private fun RateConnectionDialog(
     )
 }
 
-/**
- * Pick a random pair of moves that:
- *  - are different moves
- *  - do not already have a saved connection (in [connections])
- *  - are not in [triedPairs] (already evaluated this session)
- *
- * If [keepFirst] is non-null, we fix that as Move 1 and only choose Move 2.
- */
 private fun pickRandomPair(
     moves: List<Move>,
     triedPairs: Set<Pair<String, String>>,
@@ -380,7 +360,6 @@ private fun pickRandomPair(
         return
     }
 
-    // Treat existing saved connections as already tried.
     val alreadyConnectedPairs = connections.map { it.from to it.to }.toSet()
     val forbiddenPairs = triedPairs + alreadyConnectedPairs
 
