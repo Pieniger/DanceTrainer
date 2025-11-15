@@ -8,15 +8,16 @@ import java.io.File
 /**
  * Storage helper for the current style.
  *
- * - Base folder:
- *      - If user selected a tree URI in Settings → that folder
- *      - Else → internal app folder (filesDir/DanceTrainer)
- * - Inside base, each style is just a sub-folder named after the style.
+ * Base folder:
+ * - If user selected a tree URI in Settings → that folder
+ * - Else → internal app folder (filesDir/DanceTrainer)
+ *
+ * Inside base, each style is a sub-folder named after the style.
  *
  * Files per style:
- *      moves.txt        lines: id|name|note
- *      connections.txt  lines: fromId|toId|smoothness|note
- *      sequences.txt    lines: id|name|difficulty|note|id1,id2,...
+ *  - moves.txt        lines: id|name|note
+ *  - connections.txt  lines: fromId|toId|smoothness|note
+ *  - sequences.txt    lines: id|name|difficulty|note|id1,id2,...
  */
 object Storage {
 
@@ -148,9 +149,77 @@ object Storage {
             .toList()
     }
 
-    // ---------- Sequences (placeholder but wired up to storage) ----------
+    // ---------- Sequences (simple text format, placeholder use) ----------
 
     fun saveSequences(context: Context, sequences: List<Sequence>) {
         val lines = sequences.joinToString("\n") { s ->
             val safeNote = s.note.replace("\n", " ")
-            val movesJoined =
+            val movesJoined = s.moves.joinToString(",")
+            "${s.id}|${s.name}|${s.difficulty}|$safeNote|$movesJoined"
+        }
+        writeText(context, "sequences.txt", lines)
+    }
+
+    fun loadSequences(context: Context): List<Sequence> {
+        val text = readText(context, "sequences.txt") ?: return emptyList()
+        return text
+            .lineSequence()
+            .mapNotNull { line ->
+                if (line.isBlank()) return@mapNotNull null
+                val parts = line.split("|")
+                val id = parts.getOrNull(0)?.trim().orEmpty()
+                if (id.isEmpty()) return@mapNotNull null
+                val name = parts.getOrNull(1)?.trim().orEmpty()
+                val difficulty = parts.getOrNull(2)?.toIntOrNull() ?: 0
+                val note = parts.getOrNull(3)?.trim().orEmpty()
+                val moves = parts.getOrNull(4)
+                    ?.split(",")
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() }
+                    ?: emptyList()
+                Sequence(id = id, name = name, difficulty = difficulty, note = note, moves = moves)
+            }
+            .toList()
+    }
+
+    // ---------- Styles ----------
+
+    /**
+     * List style folders under the current base folder.
+     * (No special "styles" subfolder, just direct children.)
+     */
+    fun listStyles(context: Context): List<String> {
+        val tree = Prefs.getTreeUri(context)
+        return if (tree == null) {
+            val base = internalBaseDir(context)
+            base.listFiles()
+                ?.filter { it.isDirectory }
+                ?.mapNotNull { it.name }
+                ?.filter { it.isNotBlank() }
+                ?.sorted()
+                ?: emptyList()
+        } else {
+            val root = externalBaseDir(context) ?: return emptyList()
+            root.listFiles()
+                .filter { it.isDirectory }
+                .mapNotNull { it.name }
+                .sorted()
+        }
+    }
+
+    /**
+     * Ensure that moves.txt / connections.txt / sequences.txt exist
+     * for the currently selected style (create empty files if needed).
+     */
+    fun ensureFilesForCurrentStyle(context: Context) {
+        if (readText(context, "moves.txt") == null) {
+            writeText(context, "moves.txt", "")
+        }
+        if (readText(context, "connections.txt") == null) {
+            writeText(context, "connections.txt", "")
+        }
+        if (readText(context, "sequences.txt") == null) {
+            writeText(context, "sequences.txt", "")
+        }
+    }
+}
