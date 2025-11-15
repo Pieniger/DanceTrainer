@@ -3,219 +3,188 @@ package com.example.dancetrainer.data
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import java.io.File
 
-/**
- * File layout:
- *
- * Root folder (chosen in Settings, stored as tree URI in Prefs):
- *   /<styleName1>/
- *       moves.txt
- *       connections.txt
- *       sequences.txt
- *   /<styleName2>/
- *       ...
- *
- * We never manage the style folders themselves; they are created manually
- * (or externally). We only create the text files if missing.
- */
 object Storage {
 
     private const val MOVES_FILE = "moves.txt"
     private const val CONNECTIONS_FILE = "connections.txt"
     private const val SEQUENCES_FILE = "sequences.txt"
 
-    // --- Helpers for SAF & style directories --------------------------------
+    // ----- helpers -----
 
-    private fun getRootDocument(ctx: Context): DocumentFile? {
-        val uriStr = Prefs.getRootUri(ctx) ?: return null
-        val uri = Uri.parse(uriStr)
+    private fun currentStyle(ctx: Context): String? {
+        val s = Prefs.getStyle(ctx).trim()
+        return if (s.isEmpty()) null else s
+    }
+
+    private fun internalStyleDir(ctx: Context, style: String): File {
+        val dir = File(ctx.filesDir, style)
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    private fun externalRoot(ctx: Context): DocumentFile? {
+        val treeStr = Prefs.getTreeUri(ctx) ?: return null
+        val uri = Uri.parse(treeStr)
         return DocumentFile.fromTreeUri(ctx, uri)
     }
 
-    /** List of immediate subdirectories under the root folder – used as style names. */
+    private fun externalStyleDir(ctx: Context, style: String): DocumentFile? {
+        val root = externalRoot(ctx) ?: return null
+        val existing = root.findFile(style)
+        return existing ?: root.createDirectory(style)
+    }
+
+    private fun readTextInternal(file: File): String? =
+        if (file.exists()) file.readText() else null
+
+    private fun writeTextInternal(file: File, text: String) {
+        file.parentFile?.mkdirs()
+        file.writeText(text)
+    }
+
+    private fun readTextExternal(ctx: Context, dir: DocumentFile, name: String): String? {
+        val doc = dir.findFile(name) ?: return null
+        return ctx.contentResolver.openInputStream(doc.uri)?.use { input ->
+            input.readBytes().decodeToString()
+        }
+    }
+
+    private fun writeTextExternal(ctx: Context, dir: DocumentFile, name: String, text: String) {
+        val existing = dir.findFile(name)
+        val doc = existing ?: dir.createFile("text/plain", name) ?: return
+        ctx.contentResolver.openOutputStream(doc.uri, "rwt")?.use { out ->
+            out.write(text.toByteArray())
+        }
+    }
+
+    private fun readStyleFile(ctx: Context, style: String, name: String): String? {
+        val extDir = externalStyleDir(ctx, style)
+        return if (extDir != null) {
+            readTextExternal(ctx, extDir, name)
+        } else {
+            val file = File(internalStyleDir(ctx, style), name)
+            readTextInternal(file)
+        }
+    }
+
+    private fun writeStyleFile(ctx: Context, style: String, name: String, text: String) {
+        val extDir = externalStyleDir(ctx, style)
+        if (extDir != null) {
+            writeTextExternal(ctx, extDir, name, text)
+        } else {
+            val file = File(internalStyleDir(ctx, style), name)
+            writeTextInternal(file, text)
+        }
+    }
+
+    // ----- public API -----
+
+    /** Ensure empty text files exist for moves / connections / sequences in the given style. */
+    fun ensureFilesForStyle(ctx: Context, style: String) {
+        // Internal
+        run {
+            val dir = internalStyleDir(ctx, style)
+            val moves = File(dir, MOVES_FILE)
+            if (!moves.exists()) moves.writeText("")
+            val cons = File(dir, CONNECTIONS_FILE)
+            if (!cons.exists()) cons.writeText("")
+            val seq = File(dir, SEQUENCES_FILE)
+            if (!seq.exists()) seq.writeText("")
+        }
+
+        // External
+        val extDir = externalStyleDir(ctx, style)
+        if (extDir != null) {
+            listOf(MOVES_FILE, CONNECTIONS_FILE, SEQUENCES_FILE).forEach { name ->
+                val existing = extDir.findFile(name)
+                if (existing == null) {
+                    writeTextExternal(ctx, extDir, name, "")
+                }
+            }
+        }
+    }
+
+    /** List available style folders under the configured root. */
     fun listStyles(ctx: Context): List<String> {
-        val root = getRootDocument(ctx) ?: return emptyList()
-        return root.listFiles()
-            .filter { it.isDirectory }
-            .mapNotNull { it.name }
-            .sorted()
-    }
-
-    private fun findStyleDir(ctx: Context, style: String?): DocumentFile? {
-        val name = style ?: Prefs.getStyle(ctx) ?: return null
-        val root = getRootDocument(ctx) ?: return null
-        return root.listFiles()
-            .firstOrNull { it.isDirectory && it.name == name }
-    }
-
-    private fun getOrCreateTextFile(dir: DocumentFile, name: String, ctx: Context): DocumentFile? {
-        val existing = dir.listFiles().firstOrNull { it.name == name }
-        if (existing != null && existing.isFile) return existing
-        return dir.createFile("text/plain", name)
-    }
-
-    private fun readTextFile(ctx: Context, file: DocumentFile?): String? {
-        if (file == null || !file.isFile) return null
-        return ctx.contentResolver.openInputStream(file.uri)?.use { input ->
-            input.readBytes().toString(Charsets.UTF_8)
+        val extRoot = externalRoot(ctx)
+        if (extRoot != null) {
+            return extRoot.listFiles()
+                .filter { it.isDirectory }
+                .mapNotNull { it.name }
+                .sorted()
         }
+
+        // Fallback: internal style dirs directly under filesDir
+        val base = ctx.filesDir
+        return base.listFiles()
+            ?.filter { it.isDirectory }
+            ?.map { it.name }
+            ?.sorted()
+            ?: emptyList()
     }
-
-    private fun writeTextFile(ctx: Context, file: DocumentFile?, text: String) {
-        if (file == null || !file.isFile) return
-        ctx.contentResolver.openOutputStream(file.uri, "rwt")?.use { out ->
-            out.write(text.toByteArray(Charsets.UTF_8))
-            out.flush()
-        }
-    }
-
-    /** Ensure the 3 data files exist for the currently selected style. */
-    fun ensureFilesForCurrentStyle(ctx: Context) {
-        val style = Prefs.getStyle(ctx) ?: return
-        val dir = findStyleDir(ctx, style) ?: return
-        getOrCreateTextFile(dir, MOVES_FILE, ctx)
-        getOrCreateTextFile(dir, CONNECTIONS_FILE, ctx)
-        getOrCreateTextFile(dir, SEQUENCES_FILE, ctx)
-    }
-
-    // --- Public API used by SettingsScreen for folder selection --------------
-
-    fun setRootFolder(ctx: Context, uri: Uri?) {
-        val str = uri?.toString()
-        Prefs.setRootUri(ctx, str)
-    }
-
-    fun getRootFolderLabel(ctx: Context): String {
-        val uri = Prefs.getRootUri(ctx) ?: return "No folder selected"
-        return uri
-    }
-
-    // --- Moves ---------------------------------------------------------------
 
     fun loadMoves(ctx: Context): List<Move> {
-        val styleDir = findStyleDir(ctx, Prefs.getStyle(ctx)) ?: return emptyList()
-        val movesFile = styleDir.listFiles().firstOrNull { it.name == MOVES_FILE } ?: return emptyList()
-        val raw = readTextFile(ctx, movesFile) ?: return emptyList()
-
-        return raw
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        val style = currentStyle(ctx) ?: return emptyList()
+        val text = readStyleFile(ctx, style, MOVES_FILE) ?: return emptyList()
+        if (text.isBlank()) return emptyList()
+        return text.lines()
             .mapNotNull { line ->
-                val parts = line.split("|")
-                if (parts.size >= 2) {
-                    val id = parts[0]
-                    val name = parts[1]
-                    val notes = parts.getOrElse(2) { "" }
-                    Move(id = id, name = name, notes = notes)
-                } else null
+                if (line.isBlank()) return@mapNotNull null
+                val parts = line.split('|')
+                if (parts.size < 2) return@mapNotNull null
+                val id = parts[0]
+                val name = parts[1]
+                val notes = if (parts.size >= 3) parts[2] else ""
+                Move(id = id, name = name, notes = notes)
             }
-            .toList()
     }
 
     fun saveMoves(ctx: Context, moves: List<Move>) {
-        val styleDir = findStyleDir(ctx, Prefs.getStyle(ctx)) ?: return
-        val movesFile = getOrCreateTextFile(styleDir, MOVES_FILE, ctx) ?: return
-
-        // Very simple '|' separated format; avoid '|' in names/notes for now.
-        val text = moves.joinToString("\n") { m ->
-            listOf(
-                m.id.replace("\n", " "),
-                m.name.replace("\n", " "),
-                m.notes.replace("\n", " ")
-            ).joinToString("|")
+        val style = currentStyle(ctx) ?: return
+        val lines = moves.joinToString(separator = "\n") { m ->
+            val safeNotes = m.notes.replace("\n", " ")
+            "${m.id}|${m.name}|$safeNotes"
         }
-        writeTextFile(ctx, movesFile, text)
+        writeStyleFile(ctx, style, MOVES_FILE, lines)
     }
 
-    // --- Connections ---------------------------------------------------------
-
     fun loadConnections(ctx: Context): List<Connection> {
-        val styleDir = findStyleDir(ctx, Prefs.getStyle(ctx)) ?: return emptyList()
-        val connFile = styleDir.listFiles().firstOrNull { it.name == CONNECTIONS_FILE } ?: return emptyList()
-        val raw = readTextFile(ctx, connFile) ?: return emptyList()
-
-        return raw
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        val style = currentStyle(ctx) ?: return emptyList()
+        val text = readStyleFile(ctx, style, CONNECTIONS_FILE) ?: return emptyList()
+        if (text.isBlank()) return emptyList()
+        return text.lines()
             .mapNotNull { line ->
-                val parts = line.split("|")
-                if (parts.size >= 3) {
-                    val fromId = parts[0]
-                    val toId = parts[1]
-                    val resultStr = parts[2]
-                    val result = when (resultStr) {
-                        "WORKS" -> ConnectionResult.WORKS
-                        "DOESNT_WORK" -> ConnectionResult.DOESNT_WORK
-                        else -> return@mapNotNull null
-                    }
-                    val smoothness = parts.getOrNull(3)?.takeIf { it.isNotBlank() }?.toIntOrNull()
-                    val notes = parts.getOrNull(4) ?: ""
-                    Connection(
-                        fromId = fromId,
-                        toId = toId,
-                        result = result,
-                        smoothness = smoothness,
-                        notes = notes
-                    )
-                } else null
+                if (line.isBlank()) return@mapNotNull null
+                val parts = line.split('|')
+                if (parts.size < 4) return@mapNotNull null
+                val fromId = parts[0]
+                val toId = parts[1]
+                val works = parts[2] == "1"
+                val smooth = parts[3].toIntOrNull() ?: 0
+                val notes = if (parts.size >= 5) parts[4] else ""
+                Connection(
+                    fromId = fromId,
+                    toId = toId,
+                    works = works,
+                    smoothness = smooth,
+                    notes = notes
+                )
             }
-            .toList()
     }
 
     fun saveConnections(ctx: Context, connections: List<Connection>) {
-        val styleDir = findStyleDir(ctx, Prefs.getStyle(ctx)) ?: return
-        val connFile = getOrCreateTextFile(styleDir, CONNECTIONS_FILE, ctx) ?: return
-
-        val text = connections.joinToString("\n") { c ->
-            listOf(
-                c.fromId.replace("\n", " "),
-                c.toId.replace("\n", " "),
-                c.result.name,
-                c.smoothness?.toString() ?: "",
-                c.notes.replace("\n", " ")
-            ).joinToString("|")
+        val style = currentStyle(ctx) ?: return
+        val lines = connections.joinToString(separator = "\n") { c ->
+            val worksFlag = if (c.works) "1" else "0"
+            val safeNotes = c.notes.replace("\n", " ")
+            "${c.fromId}|${c.toId}|$worksFlag|${c.smoothness}|$safeNotes"
         }
-        writeTextFile(ctx, connFile, text)
+        writeStyleFile(ctx, style, CONNECTIONS_FILE, lines)
     }
 
-    // --- Sequences (placeholder) --------------------------------------------
-
-    fun loadSequences(ctx: Context): List<Sequence> {
-        val styleDir = findStyleDir(ctx, Prefs.getStyle(ctx)) ?: return emptyList()
-        val seqFile = styleDir.listFiles().firstOrNull { it.name == SEQUENCES_FILE } ?: return emptyList()
-        val raw = readTextFile(ctx, seqFile) ?: return emptyList()
-
-        return raw
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .mapNotNull { line ->
-                val parts = line.split("|")
-                if (parts.size >= 3) {
-                    val id = parts[0]
-                    val name = parts[1]
-                    val moves = parts[2].split(",").filter { it.isNotBlank() }
-                    val notes = parts.getOrNull(3) ?: ""
-                    Sequence(id = id, name = name, moves = moves, notes = notes)
-                } else null
-            }
-            .toList()
-    }
-
-    fun saveSequences(ctx: Context, sequences: List<Sequence>) {
-        val styleDir = findStyleDir(ctx, Prefs.getStyle(ctx)) ?: return
-        val seqFile = getOrCreateTextFile(styleDir, SEQUENCES_FILE, ctx) ?: return
-
-        val text = sequences.joinToString("\n") { s ->
-            listOf(
-                s.id.replace("\n", " "),
-                s.name.replace("\n", " "),
-                s.moves.joinToString(","),
-                s.notes.replace("\n", " ")
-            ).joinToString("|")
-        }
-        writeTextFile(ctx, seqFile, text)
-    }
+    // Sequences are placeholders for now
+    fun loadSequences(ctx: Context): List<Sequence> = emptyList()
+    fun saveSequences(ctx: Context, sequences: List<Sequence>) { /* no-op for now */ }
 }
