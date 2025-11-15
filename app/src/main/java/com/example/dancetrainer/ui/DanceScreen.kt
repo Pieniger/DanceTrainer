@@ -1,225 +1,253 @@
 package com.example.dancetrainer.ui
 
-import android.speech.tts.TextToSpeech
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.dancetrainer.MainActivity
+import com.example.dancetrainer.audio.MoveAnnouncer
+import com.example.dancetrainer.data.Connection
 import com.example.dancetrainer.data.Move
-import com.example.dancetrainer.data.Prefs
 import com.example.dancetrainer.data.Storage
-import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DanceScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    var tts: TextToSpeech? by remember { mutableStateOf(null) }
-    val ttsEnabled = remember { Prefs.isVoiceEnabled(ctx) }
+    // Load data once for this screen
+    val movesState = remember { mutableStateOf(Storage.loadMoves(ctx)) }
+    val connectionsState = remember { mutableStateOf(Storage.loadConnections(ctx)) }
 
-    // Init / dispose TTS
-    LaunchedEffect(ttsEnabled) {
-        if (ttsEnabled) {
-            tts = TextToSpeech(ctx) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    tts?.language = Locale.US
-                }
-            }
-        } else {
-            tts?.shutdown()
-            tts = null
-        }
+    val currentMoveState = remember { mutableStateOf<Move?>(null) }
+    val nextMoveState = remember { mutableStateOf<Move?>(null) }
+    val connectionNoteState = remember { mutableStateOf<String?>(null) }
+
+    val deadEndMoveNameState = remember { mutableStateOf<String?>(null) }
+
+    val announcer = remember { MoveAnnouncer(ctx) }
+    DisposableEffect(Unit) {
+        onDispose { announcer.shutdown() }
     }
 
-    fun speak(text: String) {
-        if (ttsEnabled) {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts-${System.nanoTime()}")
-        }
+    fun pickNextFor(
+        from: Move,
+        moves: List<Move>,
+        connections: List<Connection>,
+        excludeMoveId: String? = null
+    ): Pair<Move, String?>? {
+        val outgoing = connections.filter { it.from == from.id && it.smoothness > 0 }
+        if (outgoing.isEmpty()) return null
+
+        val candidateConnections = outgoing.filter { it.to != excludeMoveId }
+        if (candidateConnections.isEmpty()) return null
+
+        val chosenConnection = candidateConnections.random()
+        val targetMove = moves.find { it.id == chosenConnection.to } ?: return null
+        return targetMove to chosenConnection.notes
     }
 
-    // Load data for selected style
-    var moves by remember { mutableStateOf(Storage.loadMoves(ctx)) }
-    var connections by remember { mutableStateOf(Storage.loadConnections(ctx)) }
+    fun pickRandomStartPair() {
+        val moves = movesState.value
+        val connections = connectionsState.value
 
-    var move1 by remember { mutableStateOf<Move?>(null) }
-    var move2 by remember { mutableStateOf<Move?>(null) }
-    var connectionNote by remember { mutableStateOf("") }
-
-    var errorPopup by remember { mutableStateOf<String?>(null) }
-
-    fun pickRandomMove(except: Move? = null): Move? {
-        val list = moves.filter { it.id != except?.id }
-        return if (list.isEmpty()) null else list.random()
-    }
-
-    fun findNextMove(from: Move): Move? {
-        val candidates = connections
-            .filter { it.fromId == from.id && it.smoothness > 0 }
-            .mapNotNull { c -> moves.find { it.id == c.toId } }
-
-        return if (candidates.isEmpty()) null else candidates.random()
-    }
-
-    fun updateConnectionNote() {
-        connectionNote =
-            if (move1 != null && move2 != null)
-                connections.find { it.fromId == move1!!.id && it.toId == move2!!.id }?.notes.orEmpty()
-            else ""
-    }
-
-    fun startSequence() {
-        moves = Storage.loadMoves(ctx)
-        connections = Storage.loadConnections(ctx)
-
-        val first = pickRandomMove()
-        if (first == null) {
-            errorPopup = "No moves exist in this style!"
+        if (moves.size < 2) {
+            deadEndMoveNameState.value = if (moves.isNotEmpty()) moves.first().name else "No moves"
             return
         }
 
-        move1 = first
-        move2 = findNextMove(first)
+        // Pick a random starting move that actually has at least one outgoing connection
+        val candidatesForStart = moves.filter { move ->
+            connections.any { it.from == move.id && it.smoothness > 0 }
+        }
 
-        if (move2 == null) {
-            errorPopup = "Move '${first.name}' has no compatible follow-ups."
+        if (candidatesForStart.isEmpty()) {
+            deadEndMoveNameState.value = "No move has any outgoing connections"
             return
         }
 
-        updateConnectionNote()
+        val start = candidatesForStart.random()
+        val pair = pickNextFor(start, moves, connections) ?: run {
+            deadEndMoveNameState.value = start.name
+            return
+        }
 
-        // Speak NEXT move (move2)
-        speak(move2!!.name)
+        val (next, note) = pair
+        currentMoveState.value = start
+        nextMoveState.value = next
+        connectionNoteState.value = note
+
+        // Speak NEXT move
+        announcer.announce(next.name, 120)
     }
 
-    fun nextMove() {
-        val next = move2 ?: return
+    fun advanceToNext() {
+        val moves = movesState.value
+        val connections = connectionsState.value
+        val current = currentMoveState.value
+        val next = nextMoveState.value
 
-        move1 = next
-        move2 = findNextMove(next)
-
-        if (move2 == null) {
-            errorPopup = "Dead end! '${next.name}' has no valid follow-up.\nReturning to menu."
-        } else {
-            updateConnectionNote()
-            // Speak new NEXT move
-            speak(move2!!.name)
+        if (current == null || next == null) {
+            pickRandomStartPair()
+            return
         }
+
+        // New current is previous next
+        val newCurrent = next
+        val pair = pickNextFor(newCurrent, moves, connections)
+
+        if (pair == null) {
+            // Dead end
+            deadEndMoveNameState.value = newCurrent.name
+            return
+        }
+
+        val (newNext, note) = pair
+        currentMoveState.value = newCurrent
+        nextMoveState.value = newNext
+        connectionNoteState.value = note
+
+        // Speak NEXT move
+        announcer.announce(newNext.name, 120)
     }
 
-    fun rerollMove2() {
-        val base = move1 ?: return
+    fun rerollNext() {
+        val moves = movesState.value
+        val connections = connectionsState.value
+        val current = currentMoveState.value
+        val existingNext = nextMoveState.value
 
-        val newNext = findNextMove(base)
-        if (newNext == null) {
-            errorPopup = "No valid follow-up moves for '${base.name}'."
-        } else {
-            move2 = newNext
-            updateConnectionNote()
-            // Speak new move2 on reroll
-            speak(newNext.name)
+        if (current == null) {
+            pickRandomStartPair()
+            return
         }
+
+        val pair = pickNextFor(
+            from = current,
+            moves = moves,
+            connections = connections,
+            excludeMoveId = existingNext?.id
+        )
+
+        if (pair == null) {
+            // No alternative, treat as dead end
+            deadEndMoveNameState.value = current.name
+            return
+        }
+
+        val (newNext, note) = pair
+        nextMoveState.value = newNext
+        connectionNoteState.value = note
+
+        // Speak NEXT move
+        announcer.announce(newNext.name, 120)
     }
 
-    // Register Bluetooth / hardware key handler while this screen is visible
-    val nextKeyCode = remember { Prefs.getNextMoveKeyCode(ctx) }
-    val rerollKeyCode = remember { Prefs.getRerollKeyCode(ctx) }
-
-    DisposableEffect(nextKeyCode, rerollKeyCode) {
-        MainActivity.danceKeyHandler = { keyCode ->
-            when (keyCode) {
-                nextKeyCode -> {
-                    nextMove()
-                    true
-                }
-                rerollKeyCode -> {
-                    rerollMove2()
-                    true
-                }
-                else -> false
-            }
-        }
-        onDispose {
-            MainActivity.danceKeyHandler = null
-        }
-    }
-
-    // Start initial pair
+    // Initialize first pair when screen appears
     LaunchedEffect(Unit) {
-        startSequence()
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Dance") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Back") }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            val m1 = move1
-            val m2 = move2
-
-            if (m1 == null || m2 == null) {
-                Text("Loading…")
-                return@Column
-            }
-
-            // Current Move
-            Text("Current move", style = MaterialTheme.typography.titleMedium)
-            Text(
-                m1.name,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineMedium
-            )
-
-            if (connectionNote.isNotBlank()) {
-                Text("Note: $connectionNote", style = MaterialTheme.typography.bodyMedium)
-            }
-
-            Spacer(Modifier.height(30.dp))
-
-            // Next Move (bigger)
-            Text("Next move", style = MaterialTheme.typography.titleMedium)
-            Text(
-                m2.name,
-                fontWeight = FontWeight.Bold,
-                fontSize = (MaterialTheme.typography.headlineMedium.fontSize.value * 1.5f).sp
-            )
-
-            Spacer(Modifier.height(40.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Button(onClick = { nextMove() }) { Text("Next move") }
-                Button(onClick = { rerollMove2() }) { Text("Reroll") }
-            }
+        if (currentMoveState.value == null || nextMoveState.value == null) {
+            pickRandomStartPair()
         }
     }
 
-    errorPopup?.let { msg ->
+    // Dead-end dialog
+    deadEndMoveNameState.value?.let { moveName ->
         AlertDialog(
             onDismissRequest = { onBack() },
-            title = { Text("No valid move") },
-            text = { Text(msg) },
             confirmButton = {
-                TextButton(onClick = onBack) { Text("OK") }
+                TextButton(onClick = onBack) {
+                    Text("OK")
+                }
+            },
+            title = { Text("No further connections") },
+            text = {
+                Text("Move \"$moveName\" has no compatible next moves. Returning to the main menu.")
             }
+        )
+    }
+
+    val currentMove = currentMoveState.value
+    val nextMove = nextMoveState.value
+    val connectionNote = connectionNoteState.value
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Current Move",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Text(
+                    text = currentMove?.name ?: "—",
+                    fontSize = 20.sp, // base size
+                    style = MaterialTheme.typography.headlineSmall
+                )
+
+                if (!connectionNote.isNullOrBlank()) {
+                    Text(
+                        text = connectionNote,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                Text(
+                    text = "Next Move",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Text(
+                    text = nextMove?.name ?: "—",
+                    fontSize = 30.sp, // ~1.5× bigger
+                    style = MaterialTheme.typography.headlineMedium
+                )
+            }
+        }
+
+        Button(
+            onClick = { advanceToNext() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Next Move")
+        }
+
+        Button(
+            onClick = { rerollNext() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Reroll")
+        }
+
+        Text(
+            text = "Tip: \"Next Move\" is also spoken aloud.",
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
