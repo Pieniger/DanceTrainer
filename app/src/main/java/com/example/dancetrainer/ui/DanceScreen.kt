@@ -45,21 +45,42 @@ fun DanceScreen(onBack: () -> Unit) {
         onDispose { announcer.shutdown() }
     }
 
+    /**
+     * Pick a random *positive* connection from [fromMove] to some other Move,
+     * optionally excluding a specific [excludeMoveId].
+     *
+     * Returns Pair(nextMove, connectionNoteOrNull) or null if no valid next move.
+     */
     fun pickNextFor(
-        from: Move,
+        fromMove: Move,
         moves: List<Move>,
         connections: List<Connection>,
         excludeMoveId: String? = null
     ): Pair<Move, String?>? {
-        val outgoing = connections.filter { it.from == from.id && it.smoothness > 0 }
+        // All outgoing positive connections from this move
+        val outgoing = connections.filter { conn ->
+            conn.from == fromMove.id && conn.smoothness > 0
+        }
         if (outgoing.isEmpty()) return null
 
-        val candidateConnections = outgoing.filter { it.to != excludeMoveId }
-        if (candidateConnections.isEmpty()) return null
+        // Optionally exclude a specific target
+        val candidates = if (excludeMoveId != null) {
+            outgoing.filter { conn -> conn.to != excludeMoveId }
+        } else {
+            outgoing
+        }
+        if (candidates.isEmpty()) return null
 
-        val chosenConnection = candidateConnections.random()
-        val targetMove = moves.find { it.id == chosenConnection.to } ?: return null
-        return targetMove to chosenConnection.notes
+        // Choose one connection at random
+        val chosen = candidates.random()
+
+        // Find the Move that is the target
+        val targetMove = moves.firstOrNull { m -> m.id == chosen.to } ?: return null
+
+        // Normalise note
+        val note: String? = chosen.notes.takeIf { !it.isNullOrBlank() }
+
+        return targetMove to note
     }
 
     fun pickRandomStartPair() {
@@ -73,7 +94,7 @@ fun DanceScreen(onBack: () -> Unit) {
 
         // Pick a random starting move that actually has at least one outgoing connection
         val candidatesForStart = moves.filter { move ->
-            connections.any { it.from == move.id && it.smoothness > 0 }
+            connections.any { conn -> conn.from == move.id && conn.smoothness > 0 }
         }
 
         if (candidatesForStart.isEmpty()) {
@@ -138,7 +159,7 @@ fun DanceScreen(onBack: () -> Unit) {
         }
 
         val pair = pickNextFor(
-            from = current,
+            fromMove = current,
             moves = moves,
             connections = connections,
             excludeMoveId = existingNext?.id
@@ -208,7 +229,7 @@ fun DanceScreen(onBack: () -> Unit) {
                 )
                 Text(
                     text = currentMove?.name ?: "—",
-                    fontSize = 20.sp, // base size
+                    fontSize = 20.sp,
                     style = MaterialTheme.typography.headlineSmall
                 )
 
