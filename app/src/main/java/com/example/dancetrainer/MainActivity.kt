@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 fun App() {
     AppTheme {
         val nav = rememberNavController()
+
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -104,3 +105,4 @@ fun App() {
         }
     }
 }
+```0
