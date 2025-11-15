@@ -1,10 +1,30 @@
 package com.example.dancetrainer.ui
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
@@ -20,26 +40,30 @@ fun ManageMovesScreen(
 ) {
     val ctx = LocalContext.current
 
-    var moves by remember {
-        mutableStateOf(Storage.loadMoves(ctx).toMutableList())
-    }
-
-    fun persist() {
-        Storage.saveMoves(ctx, moves)
-    }
-
+    var moves by remember { mutableStateOf<List<Move>>(emptyList()) }
     var showAdd by remember { mutableStateOf(false) }
-    var showEditFor by remember { mutableStateOf<Move?>(null) }
+    var editingMove by remember { mutableStateOf<Move?>(null) }
+
+    LaunchedEffect(Unit) {
+        moves = Storage.loadMoves(ctx)
+    }
+
+    fun persist(newList: List<Move>) {
+        moves = newList
+        Storage.saveMoves(ctx, newList)
+    }
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Manage Moves") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
-                    Button(onClick = { showAdd = true }) { Text("Add Move") }
+                    Button(onClick = { showAdd = true }) {
+                        Text("Add Move")
+                    }
                 }
             )
         }
@@ -54,39 +78,31 @@ fun ManageMovesScreen(
             if (moves.isEmpty()) {
                 Text("No moves yet. Tap 'Add Move' to create one.")
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(moves, key = { it.id }) { move ->
-                        ElevatedCard {
+                        ElevatedCard(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    move.name,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                                Text(move.name, style = MaterialTheme.typography.titleMedium)
                                 if (move.notes.isNotBlank()) {
                                     Text(
-                                        move.notes,
+                                        "Notes: ${move.notes}",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(onClick = { showEditFor = move }) {
-                                            Text("Edit")
-                                        }
-                                        OutlinedButton(onClick = {
-                                            moves = moves.filterNot { it.id == move.id }.toMutableList()
-                                            persist()
-                                        }) {
-                                            Text("Delete")
-                                        }
+                                    OutlinedButton(onClick = { editingMove = move }) {
+                                        Text("Edit")
                                     }
                                     Button(onClick = { onFindConnectionForMove(move.id) }) {
                                         Text("Find Connection")
@@ -107,45 +123,31 @@ fun ManageMovesScreen(
             initialNotes = "",
             onDismiss = { showAdd = false },
             onConfirm = { name, notes ->
-                val baseId = name.lowercase().replace("\\s+".toRegex(), "_")
-                val uniqueId = generateUniqueId(baseId, moves)
-                val newMove = Move(
-                    id = uniqueId,
-                    name = name,
-                    notes = notes
-                )
-                moves = (moves + newMove).toMutableList()
-                persist()
+                val id = name.lowercase().replace("\\s+".toRegex(), "_")
+                val newMove = Move(id = id, name = name, notes = notes)
+                persist(moves + newMove)
                 showAdd = false
             }
         )
     }
 
-    showEditFor?.let { editing ->
+    editingMove?.let { move ->
         MoveDialog(
             title = "Edit Move",
-            initialName = editing.name,
-            initialNotes = editing.notes,
-            onDismiss = { showEditFor = null },
+            initialName = move.name,
+            initialNotes = move.notes,
+            onDismiss = { editingMove = null },
             onConfirm = { name, notes ->
-                editing.name = name
-                editing.notes = notes
-                moves = moves.toMutableList() // trigger recomposition
-                persist()
-                showEditFor = null
+                val updated = moves.map {
+                    if (it.id == move.id) it.copy(name = name, notes = notes) else it
+                }
+                persist(updated)
+                editingMove = null
             }
         )
     }
 }
 
-private fun generateUniqueId(base: String, moves: List<Move>): String {
-    if (moves.none { it.id == base }) return base
-    var i = 1
-    while (moves.any { it.id == "${base}_$i" }) i++
-    return "${base}_$i"
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MoveDialog(
     title: String,
@@ -165,13 +167,14 @@ private fun MoveDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") }
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes") },
-                    minLines = 3
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
@@ -180,13 +183,16 @@ private fun MoveDialog(
                 val trimmed = name.text.trim()
                 if (trimmed.isNotEmpty()) {
                     onConfirm(trimmed, notes.text.trim())
-                } else {
-                    onDismiss()
                 }
-            }) { Text("Save") }
+                onDismiss()
+            }) {
+                Text("Save")
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
     )
 }
