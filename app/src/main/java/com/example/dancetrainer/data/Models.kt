@@ -1,41 +1,44 @@
 package com.example.dancetrainer.data
 
 /**
- * Core data models for the app.
- *
- * We keep them simple POJOs so they are easy to persist
- * in our custom text-based Storage.
+ * A dance move belonging to a given style.
+ * Notes can hold any extra explanation (e.g. lead, follower hints, etc.).
  */
-
 data class Move(
     val id: String,
     var name: String,
-    var note: String = ""
+    var notes: String = ""
 )
 
 /**
- * A positive, rated connection from one move to another.
+ * Result of a connection evaluation between two moves.
+ */
+enum class ConnectionResult {
+    WORKS,
+    DOESNT_WORK
+}
+
+/**
+ * A connection from one move to another.
  *
- * - from: id of the starting move
- * - to: id of the following move
- * - smoothness: 1..10 (or similar scale)
- * - note: free-form description of why / how it works
+ * - result = WORKS / DOESNT_WORK (from ConnectionFinder)
+ * - smoothness = optional numeric "how nice it feels" (only meaningful for WORKS)
+ * - notes = any extra comments about the transition
  */
 data class Connection(
-    val from: String,
-    val to: String,
-    var smoothness: Int,
-    var note: String = ""
+    val fromId: String,
+    val toId: String,
+    val result: ConnectionResult,
+    val smoothness: Int? = null,
+    val notes: String = ""
 )
 
 /**
- * Sequences are placeholders for now; kept in case you
- * want to wire them up later.
+ * Placeholder for future use. Not used by Dance yet, but wired for storage.
  */
 data class Sequence(
     val id: String,
-    val name: String,
-    val moves: List<String> = emptyList(),
-    val difficulty: Int = 0,
-    var note: String = ""
+    var name: String,
+    val moves: List<String>,
+    val notes: String = ""
 )
