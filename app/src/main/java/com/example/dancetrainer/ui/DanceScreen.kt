@@ -26,9 +26,6 @@ import com.example.dancetrainer.data.Connection
 import com.example.dancetrainer.data.Move
 import com.example.dancetrainer.data.Storage
 
-/**
- * Simple result holder when picking the next step from a given move.
- */
 private data class NextStep(
     val nextMove: Move,
     val note: String?
@@ -38,7 +35,6 @@ private data class NextStep(
 fun DanceScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    // Load from current style/folder
     val movesState = remember { mutableStateOf(Storage.loadMoves(ctx)) }
     val connectionsState = remember { mutableStateOf(Storage.loadConnections(ctx)) }
 
@@ -48,29 +44,22 @@ fun DanceScreen(onBack: () -> Unit) {
 
     val deadEndMoveNameState = remember { mutableStateOf<String?>(null) }
 
-    // TTS announcer
     val announcer = remember { MoveAnnouncer(ctx) }
     DisposableEffect(Unit) {
         onDispose { announcer.shutdown() }
     }
 
-    /**
-     * Pick a NEXT move for [sourceMove] using only positive connections (smoothness > 0).
-     * If [excludeMoveId] is not null, we skip that target id (used for reroll).
-     */
     fun pickNextFor(
         sourceMove: Move,
         moves: List<Move>,
         connections: List<Connection>,
         excludeMoveId: String? = null
     ): NextStep? {
-        // All outgoing positive connections from this move
         val outgoing = connections.filter { conn ->
             conn.from == sourceMove.id && conn.smoothness > 0
         }
         if (outgoing.isEmpty()) return null
 
-        // Optional exclusion (for reroll)
         val filtered = if (excludeMoveId != null) {
             outgoing.filter { conn -> conn.to != excludeMoveId }
         } else {
@@ -78,13 +67,9 @@ fun DanceScreen(onBack: () -> Unit) {
         }
         if (filtered.isEmpty()) return null
 
-        // Choose one connection at random
         val chosen = filtered.random()
-
-        // Find the target move
         val targetMove = moves.firstOrNull { m -> m.id == chosen.to } ?: return null
-
-        val note: String? = if (!chosen.notes.isNullOrBlank()) chosen.notes else null
+        val note = chosen.notes.takeUnless { it.isNullOrBlank() }
 
         return NextStep(
             nextMove = targetMove,
@@ -102,7 +87,6 @@ fun DanceScreen(onBack: () -> Unit) {
             return
         }
 
-        // Only allow starting from moves that have at least one outgoing positive connection
         val candidatesForStart = moves.filter { move ->
             connections.any { conn ->
                 conn.from == move.id && conn.smoothness > 0
@@ -188,14 +172,12 @@ fun DanceScreen(onBack: () -> Unit) {
         announcer.announce(nextStep.nextMove.name, 120)
     }
 
-    // Initialize pair on first entry
     LaunchedEffect(Unit) {
         if (currentMoveState.value == null || nextMoveState.value == null) {
             pickRandomStartPair()
         }
     }
 
-    // Dead-end dialog → back to main menu
     deadEndMoveNameState.value?.let { moveName ->
         AlertDialog(
             onDismissRequest = { onBack() },
@@ -253,7 +235,7 @@ fun DanceScreen(onBack: () -> Unit) {
                 )
                 Text(
                     text = nextMove?.name ?: "—",
-                    fontSize = 30.sp,    // bigger
+                    fontSize = 30.sp,
                     style = MaterialTheme.typography.headlineMedium
                 )
             }
