@@ -5,12 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,180 +20,102 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dancetrainer.audio.MoveAnnouncer
-import com.example.dancetrainer.data.Connection
 import com.example.dancetrainer.data.Move
 import com.example.dancetrainer.data.Storage
-
-private data class NextStep(
-    val nextMove: Move,
-    val note: String?
-)
 
 @Composable
 fun DanceScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
+    // Load all moves from the currently-selected style folder
     val movesState = remember { mutableStateOf(Storage.loadMoves(ctx)) }
-    val connectionsState = remember { mutableStateOf(Storage.loadConnections(ctx)) }
 
+    // Current & next move
     val currentMoveState = remember { mutableStateOf<Move?>(null) }
     val nextMoveState = remember { mutableStateOf<Move?>(null) }
-    val connectionNoteState = remember { mutableStateOf<String?>(null) }
 
-    val deadEndMoveNameState = remember { mutableStateOf<String?>(null) }
-
+    // TTS announcer
     val announcer = remember { MoveAnnouncer(ctx) }
     DisposableEffect(Unit) {
         onDispose { announcer.shutdown() }
     }
 
-    fun pickNextFor(
-        sourceMove: Move,
-        moves: List<Move>,
-        connections: List<Connection>,
-        excludeMoveId: String? = null
-    ): NextStep? {
-        val outgoing = connections.filter { conn ->
-            conn.from == sourceMove.id && conn.smoothness > 0
-        }
-        if (outgoing.isEmpty()) return null
-
-        val filtered = if (excludeMoveId != null) {
-            outgoing.filter { conn -> conn.to != excludeMoveId }
-        } else {
-            outgoing
-        }
-        if (filtered.isEmpty()) return null
-
-        val chosen = filtered.random()
-        val targetMove = moves.firstOrNull { m -> m.id == chosen.to } ?: return null
-        val note = chosen.notes.takeUnless { it.isNullOrBlank() }
-
-        return NextStep(
-            nextMove = targetMove,
-            note = note
-        )
-    }
-
-    fun pickRandomStartPair() {
+    fun pickTwoDistinctRandomMoves() {
         val moves = movesState.value
-        val connections = connectionsState.value
-
         if (moves.size < 2) {
-            deadEndMoveNameState.value =
-                if (moves.isNotEmpty()) moves.first().name else "No moves defined"
+            currentMoveState.value = moves.firstOrNull()
+            nextMoveState.value = null
             return
         }
 
-        val candidatesForStart = moves.filter { move ->
-            connections.any { conn ->
-                conn.from == move.id && conn.smoothness > 0
-            }
-        }
+        val first = moves.random()
+        val second = moves.filter { it.id != first.id }.random()
 
-        if (candidatesForStart.isEmpty()) {
-            deadEndMoveNameState.value = "No move has any outgoing connections"
-            return
-        }
-
-        val start = candidatesForStart.random()
-        val nextStep = pickNextFor(start, moves, connections)
-
-        if (nextStep == null) {
-            deadEndMoveNameState.value = start.name
-            return
-        }
-
-        currentMoveState.value = start
-        nextMoveState.value = nextStep.nextMove
-        connectionNoteState.value = nextStep.note
+        currentMoveState.value = first
+        nextMoveState.value = second
 
         // Speak NEXT move (not current)
-        announcer.announce(nextStep.nextMove.name, 120)
+        announcer.announce(second.name, 120)
     }
 
     fun advanceToNext() {
         val moves = movesState.value
-        val connections = connectionsState.value
         val current = currentMoveState.value
         val next = nextMoveState.value
 
+        if (moves.size < 2) {
+            currentMoveState.value = moves.firstOrNull()
+            nextMoveState.value = null
+            return
+        }
+
+        // If we don't yet have both moves, just pick fresh
         if (current == null || next == null) {
-            pickRandomStartPair()
+            pickTwoDistinctRandomMoves()
             return
         }
 
+        // Promote next -> current, pick a new next that is different
         val newCurrent = next
-        val nextStep = pickNextFor(newCurrent, moves, connections)
-
-        if (nextStep == null) {
-            deadEndMoveNameState.value = newCurrent.name
-            return
-        }
+        val newNext = moves.filter { it.id != newCurrent.id }.random()
 
         currentMoveState.value = newCurrent
-        nextMoveState.value = nextStep.nextMove
-        connectionNoteState.value = nextStep.note
+        nextMoveState.value = newNext
 
         // Speak NEXT move
-        announcer.announce(nextStep.nextMove.name, 120)
+        announcer.announce(newNext.name, 120)
     }
 
     fun rerollNext() {
         val moves = movesState.value
-        val connections = connectionsState.value
         val current = currentMoveState.value
-        val existingNext = nextMoveState.value
+
+        if (moves.size < 2) {
+            return
+        }
 
         if (current == null) {
-            pickRandomStartPair()
+            pickTwoDistinctRandomMoves()
             return
         }
 
-        val excludeId = existingNext?.id
-        val nextStep = pickNextFor(
-            sourceMove = current,
-            moves = moves,
-            connections = connections,
-            excludeMoveId = excludeId
-        )
-
-        if (nextStep == null) {
-            deadEndMoveNameState.value = current.name
-            return
-        }
-
-        nextMoveState.value = nextStep.nextMove
-        connectionNoteState.value = nextStep.note
+        // Pick a different next move than the current one
+        val newNext = moves.filter { it.id != current.id }.random()
+        nextMoveState.value = newNext
 
         // Speak NEXT move
-        announcer.announce(nextStep.nextMove.name, 120)
+        announcer.announce(newNext.name, 120)
     }
 
+    // Initial pair on first composition
     LaunchedEffect(Unit) {
-        if (currentMoveState.value == null || nextMoveState.value == null) {
-            pickRandomStartPair()
+        if (currentMoveState.value == null && nextMoveState.value == null) {
+            pickTwoDistinctRandomMoves()
         }
-    }
-
-    deadEndMoveNameState.value?.let { moveName ->
-        AlertDialog(
-            onDismissRequest = { onBack() },
-            confirmButton = {
-                TextButton(onClick = onBack) {
-                    Text("OK")
-                }
-            },
-            title = { Text("No further connections") },
-            text = {
-                Text("Move \"$moveName\" has no compatible next moves. Returning to the main menu.")
-            }
-        )
     }
 
     val currentMove = currentMoveState.value
     val nextMove = nextMoveState.value
-    val connectionNote = connectionNoteState.value
 
     Column(
         modifier = Modifier
@@ -222,12 +142,8 @@ fun DanceScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.headlineSmall
                 )
 
-                if (!connectionNote.isNullOrBlank()) {
-                    Text(
-                        text = connectionNote,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+                // No connection note in this simplified version
+                // (we'll re-introduce it once connection logic is stable)
 
                 Text(
                     text = "Next Move",
@@ -235,7 +151,7 @@ fun DanceScreen(onBack: () -> Unit) {
                 )
                 Text(
                     text = nextMove?.name ?: "—",
-                    fontSize = 30.sp,
+                    fontSize = 30.sp, // larger text for next move
                     style = MaterialTheme.typography.headlineMedium
                 )
             }
@@ -256,7 +172,7 @@ fun DanceScreen(onBack: () -> Unit) {
         }
 
         Text(
-            text = "Tip: \"Next Move\" is also spoken aloud.",
+            text = "Tip: \"Next Move\" is spoken aloud.",
             style = MaterialTheme.typography.bodySmall
         )
     }
