@@ -1,6 +1,8 @@
 package com.example.dancetrainer.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -117,63 +120,81 @@ fun DanceScreen(onBack: () -> Unit) {
     val currentMove = currentMoveState.value
     val nextMove = nextMoveState.value
 
-    Column(
+    // Pointer handler for Bluetooth "mouse" and touch:
+    // - single tap/click  -> Next Move
+    // - double tap/click  -> Reroll
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        // Single click / tap => Next Move
+                        advanceToNext()
+                    },
+                    onDoubleTap = {
+                        // Double click / tap => Reroll
+                        rerollNext()
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
     ) {
-        ElevatedCard(
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Current Move",
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Text(
-                    text = currentMove?.name ?: "—",
-                    fontSize = 20.sp,
-                    style = MaterialTheme.typography.headlineSmall
-                )
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Current Move",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        text = currentMove?.name ?: "—",
+                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.headlineSmall
+                    )
 
-                // No connection note in this simplified version
-                // (we'll re-introduce it once connection logic is stable)
-
-                Text(
-                    text = "Next Move",
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Text(
-                    text = nextMove?.name ?: "—",
-                    fontSize = 30.sp, // larger text for next move
-                    style = MaterialTheme.typography.headlineMedium
-                )
+                    Text(
+                        text = "Next Move",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        text = nextMove?.name ?: "—",
+                        fontSize = 30.sp, // larger text for next move
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                }
             }
-        }
 
-        Button(
-            onClick = { advanceToNext() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Next Move")
-        }
+            Button(
+                onClick = { advanceToNext() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Next Move (single click)")
+            }
 
-        Button(
-            onClick = { rerollNext() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Reroll")
-        }
+            Button(
+                onClick = { rerollNext() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Reroll (double click)")
+            }
 
-        Text(
-            text = "Tip: \"Next Move\" is spoken aloud.",
-            style = MaterialTheme.typography.bodySmall
-        )
+            Text(
+                text = "Tip: Single click = Next, Double click = Reroll.\nTTS always speaks the NEXT move.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 }
