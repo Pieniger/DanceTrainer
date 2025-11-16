@@ -1,6 +1,5 @@
 package com.example.dancetrainer.ui
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,14 +13,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,18 +34,19 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.example.dancetrainer.data.Prefs
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
     // Read persisted values from Prefs
     val initialTree = remember { Prefs.getTreeUri(ctx) }
-    val initialStyle = remember { Prefs.getStyle(ctx) }
+    val initialStyle = remember { Prefs.getStyle(ctx) ?: "" }
     val initialVoice = remember { Prefs.isVoiceEnabled(ctx) }
 
     var baseFolderUri by remember { mutableStateOf(initialTree) }
     var availableStyles by remember { mutableStateOf<List<String>>(emptyList()) }
-    var selectedStyle by remember { mutableStateOf(initialStyle) }
+    var selectedStyle by remember { mutableStateOf(initialStyle) }  // always non-null, can be ""
     var voiceEnabled by remember { mutableStateOf(initialVoice) }
 
     // Helper: scan subfolders of the base folder as styles
@@ -59,14 +60,17 @@ fun SettingsScreen(onBack: () -> Unit) {
             .sorted()
     }
 
-    // Initial scan
+    // Initial scan whenever base folder changes
     LaunchedEffect(baseFolderUri) {
-        availableStyles = scanStyles(baseFolderUri)
-        if (availableStyles.isNotEmpty()) {
-            if (selectedStyle !in availableStyles) {
-                selectedStyle = availableStyles.first()
-                Prefs.setStyle(ctx, selectedStyle!!)
+        val styles = scanStyles(baseFolderUri)
+        availableStyles = styles
+        if (styles.isNotEmpty()) {
+            if (selectedStyle !in styles) {
+                selectedStyle = styles.first()
+                Prefs.setStyle(ctx, selectedStyle)
             }
+        } else {
+            selectedStyle = ""
         }
     }
 
@@ -91,9 +95,9 @@ fun SettingsScreen(onBack: () -> Unit) {
             availableStyles = styles
             if (styles.isNotEmpty()) {
                 selectedStyle = styles.first()
-                Prefs.setStyle(ctx, selectedStyle!!)
+                Prefs.setStyle(ctx, selectedStyle)
             } else {
-                selectedStyle = null
+                selectedStyle = ""
             }
         }
     }
@@ -159,7 +163,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                             var expanded by remember { mutableStateOf(false) }
 
                             Text(
-                                text = selectedStyle ?: "No style selected",
+                                text = if (selectedStyle.isNotEmpty())
+                                    selectedStyle
+                                else
+                                    "No style selected",
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier
                                     .fillMaxWidth()
