@@ -19,7 +19,8 @@ fun HomeScreen(
     onSettings: () -> Unit,
     onDance: () -> Unit,
     onGraph: () -> Unit,
-    onSequences: () -> Unit
+    onSequences: () -> Unit,
+    onConnections: () -> Unit,      // ✅ NEW
 ) {
     ElevatedCard(
         modifier = Modifier
@@ -41,6 +42,7 @@ fun HomeScreen(
             Button(onClick = onDance) { Text("Dance") }
             Button(onClick = onSequences) { Text("Sequences") }
             Button(onClick = onGraph) { Text("Graph") }
+            Button(onClick = onConnections) { Text("Connections") }  // ✅ NEW
             Button(onClick = onSettings) { Text("Settings") }
         }
     }
