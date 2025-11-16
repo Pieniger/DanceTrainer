@@ -1,44 +1,100 @@
 package com.example.dancetrainer.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import com.example.dancetrainer.data.Prefs
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    var voiceEnabled by remember { mutableStateOf(Prefs.isVoiceEnabled(ctx)) }
-    var treeUri by remember { mutableStateOf(Prefs.getTreeUri(ctx)) }
+    // Read persisted values from Prefs
+    val initialTree = remember { Prefs.getTreeUri(ctx) }
+    val initialStyle = remember { Prefs.getStyle(ctx) }
+    val initialVoice = remember { Prefs.isVoiceEnabled(ctx) }
 
-    var nextKeyText by remember {
-        mutableStateOf(Prefs.getNextMoveKeyCode(ctx)?.toString() ?: "")
-    }
-    var rerollKeyText by remember {
-        mutableStateOf(Prefs.getRerollKeyCode(ctx)?.toString() ?: "")
+    var baseFolderUri by remember { mutableStateOf(initialTree) }
+    var availableStyles by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedStyle by remember { mutableStateOf(initialStyle) }
+    var voiceEnabled by remember { mutableStateOf(initialVoice) }
+
+    // Helper: scan subfolders of the base folder as styles
+    fun scanStyles(uriString: String?): List<String> {
+        if (uriString.isNullOrEmpty()) return emptyList()
+        val uri = Uri.parse(uriString)
+        val tree = DocumentFile.fromTreeUri(ctx, uri) ?: return emptyList()
+        return tree.listFiles()
+            .filter { it.isDirectory }
+            .mapNotNull { it.name }
+            .sorted()
     }
 
+    // Initial scan
+    LaunchedEffect(baseFolderUri) {
+        availableStyles = scanStyles(baseFolderUri)
+        if (availableStyles.isNotEmpty()) {
+            if (selectedStyle !in availableStyles) {
+                selectedStyle = availableStyles.first()
+                Prefs.setStyle(ctx, selectedStyle!!)
+            }
+        }
+    }
+
+    // Folder picker (for base DanceTrainer folder)
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            val flags =
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             try {
                 ctx.contentResolver.takePersistableUriPermission(uri, flags)
             } catch (_: Exception) {
+                // ignore if not supported
             }
-            treeUri = uri.toString()
-            Prefs.setTreeUri(ctx, treeUri)
+
+            baseFolderUri = uri.toString()
+            Prefs.setTreeUri(ctx, baseFolderUri)
+
+            // Rescan styles for this folder
+            val styles = scanStyles(baseFolderUri)
+            availableStyles = styles
+            if (styles.isNotEmpty()) {
+                selectedStyle = styles.first()
+                Prefs.setStyle(ctx, selectedStyle!!)
+            } else {
+                selectedStyle = null
+            }
         }
     }
 
@@ -57,79 +113,116 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(padding)
                 .padding(16.dp)
                 .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
-            // ---- TTS toggle ----
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Switch(
-                    checked = voiceEnabled,
-                    onCheckedChange = {
-                        voiceEnabled = it
-                        Prefs.setVoiceEnabled(ctx, it)
-                    }
-                )
-                Text("Voice announcements (TTS)")
-            }
-
-            // ---- Data folder selection ----
-            ElevatedCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Data folder")
+            // Base folder card
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        treeUri ?: "No folder selected yet. " +
-                                "Choose a folder that contains your dance-style subfolders."
+                        "Base Data Folder",
+                        style = MaterialTheme.typography.titleMedium
                     )
-                    Button(onClick = { folderPicker.launch(null) }) {
-                        Text("Choose folder")
+                    Text(
+                        text = baseFolderUri ?: "No folder selected",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = { folderPicker.launch(null) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Choose Folder")
                     }
                 }
             }
 
-            // ---- Bluetooth / remote controls ----
-            ElevatedCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Bluetooth / Remote controls")
+            // Style selection (if we have a base folder and styles)
+            if (!baseFolderUri.isNullOrEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Dance Style",
+                            style = MaterialTheme.typography.titleMedium
+                        )
 
-                    Text(
-                        "Enter Android key codes for your remote buttons. " +
-                                "If set, those keys will trigger the buttons on the Dance screen."
-                    )
+                        if (availableStyles.isEmpty()) {
+                            Text(
+                                text = "No subfolders found. Create one folder per style in the selected base folder.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else {
+                            var expanded by remember { mutableStateOf(false) }
 
-                    OutlinedTextField(
-                        value = nextKeyText,
-                        onValueChange = { text ->
-                            val digits = text.filter { it.isDigit() }
-                            nextKeyText = digits
-                            Prefs.setNextMoveKeyCode(ctx, digits.toIntOrNull())
-                        },
-                        label = { Text("Next move key code") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                            Text(
+                                text = selectedStyle ?: "No style selected",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp)
+                            )
 
-                    OutlinedTextField(
-                        value = rerollKeyText,
-                        onValueChange = { text ->
-                            val digits = text.filter { it.isDigit() }
-                            rerollKeyText = digits
-                            Prefs.setRerollKeyCode(ctx, digits.toIntOrNull())
-                        },
-                        label = { Text("Reroll key code") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                            Button(
+                                onClick = { expanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Change Style")
+                            }
 
-                    Text(
-                        "Tip: Common keys your remote might send:\n" +
-                                "- Volume Up / Down\n" +
-                                "- Media Next / Previous\n" +
-                                "- Play / Pause, etc.\n" +
-                                "You can find the numeric key code with a simple key-test app, " +
-                                "then enter it here."
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                availableStyles.forEach { styleName ->
+                                    DropdownMenuItem(
+                                        text = { Text(styleName) },
+                                        onClick = {
+                                            selectedStyle = styleName
+                                            Prefs.setStyle(ctx, styleName)
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Styles are taken from subfolder names inside the base folder.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            // TTS / Voice announcements toggle
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("Voice announcements", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "If enabled, the app uses TTS to speak the next move.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = voiceEnabled,
+                        onCheckedChange = { checked ->
+                            voiceEnabled = checked
+                            Prefs.setVoiceEnabled(ctx, checked)
+                        }
                     )
                 }
             }
