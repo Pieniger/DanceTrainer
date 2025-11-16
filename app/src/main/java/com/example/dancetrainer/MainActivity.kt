@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.dancetrainer.ui.ConnectionFinderScreen
+import com.example.dancetrainer.ui.ConnectionsScreen
 import com.example.dancetrainer.ui.DanceScreen
 import com.example.dancetrainer.ui.GraphScreen
 import com.example.dancetrainer.ui.HomeScreen
@@ -36,7 +37,6 @@ class MainActivity : ComponentActivity() {
 fun App() {
     AppTheme {
         val nav = rememberNavController()
-
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -56,7 +56,8 @@ fun App() {
                         onDance = { nav.navigate("dance") },
                         onSequences = { nav.navigate("sequences") },
                         onGraph = { nav.navigate("graph") },
-                        onSettings = { nav.navigate("settings") }
+                        onSettings = { nav.navigate("settings") },
+                        onConnections = { nav.navigate("connections") } // ✅ NEW
                     )
                 }
 
@@ -100,6 +101,11 @@ fun App() {
 
                 composable("settings") {
                     SettingsScreen(onBack = { nav.popBackStack() })
+                }
+
+                // ✅ NEW route
+                composable("connections") {
+                    ConnectionsScreen(onBack = { nav.popBackStack() })
                 }
             }
         }
