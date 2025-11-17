@@ -9,6 +9,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -25,6 +26,7 @@ import com.example.dancetrainer.data.Connection
 import com.example.dancetrainer.data.Move
 import com.example.dancetrainer.data.Storage
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -134,7 +136,7 @@ fun ConnectionsScreen(onBack: () -> Unit) {
                     }
                 } else {
                     val move = selectedMove!!
-                    // We treat all connections as "positive" here
+                    // All connections are treated as “positive” here
                     val outgoing = connections.filter { it.fromId == move.id }
                     val incoming = connections.filter { it.toId == move.id }
 
