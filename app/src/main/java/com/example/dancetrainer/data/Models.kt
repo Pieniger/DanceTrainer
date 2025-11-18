@@ -1,5 +1,8 @@
 package com.example.dancetrainer.data
 
+/**
+ * A single dance move.
+ */
 data class Move(
     val id: String,
     var name: String,
@@ -20,7 +23,9 @@ data class Connection(
     var notes: String = ""
 )
 
-// Placeholder for the future – not really used yet.
+/**
+ * Placeholder for future use.
+ */
 data class Sequence(
     val id: String,
     val name: String,
