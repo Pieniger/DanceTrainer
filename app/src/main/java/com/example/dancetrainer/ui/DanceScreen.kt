@@ -1,200 +1,66 @@
-package com.example.dancetrainer.ui
+/**
+ * Choose the next move from [from] using [connections].
+ *
+ * - Excludes:
+ *   - [from] itself
+ *   - any moves with a *negative* connection (works == false)
+ * - If [priorityMode] is false → uniform random.
+ * - If [priorityMode] is true  → weighted by smoothness (1..5).
+ *
+ * Returns Pair(nextMove, connectionNote).
+ */
+private fun pickNextMove(
+    moves: List<Move>,
+    connections: List<Connection>,
+    from: Move,
+    priorityMode: Boolean
+): Pair<Move?, String?> {
+    if (moves.size < 2) return null to null
 
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.dancetrainer.audio.MoveAnnouncer
-import com.example.dancetrainer.data.Move
-import com.example.dancetrainer.data.Storage
+    val positive = connections.filter { it.fromId == from.id && it.works }
+    val negativeTargets = connections
+        .filter { it.fromId == from.id && !it.works }
+        .map { it.toId }
+        .toSet()
 
-@Composable
-fun DanceScreen(onBack: () -> Unit) {
-    val ctx = LocalContext.current
+    val candidates = moves.filter { m ->
+        m.id != from.id && m.id !in negativeTargets
+    }
+    if (candidates.isEmpty()) return null to null
 
-    // Load all moves from the currently-selected style folder
-    val movesState = remember { mutableStateOf(Storage.loadMoves(ctx)) }
-
-    // Current & next move
-    val currentMoveState = remember { mutableStateOf<Move?>(null) }
-    val nextMoveState = remember { mutableStateOf<Move?>(null) }
-
-    // TTS announcer
-    val announcer = remember { MoveAnnouncer(ctx) }
-    DisposableEffect(Unit) {
-        onDispose { announcer.shutdown() }
+    // No priority mode → plain random
+    if (!priorityMode) {
+        val chosen = candidates.random()
+        val conn = positive.firstOrNull { it.toId == chosen.id }
+        return chosen to conn?.notes
     }
 
-    fun pickTwoDistinctRandomMoves() {
-        val moves = movesState.value
-        if (moves.size < 2) {
-            currentMoveState.value = moves.firstOrNull()
-            nextMoveState.value = null
-            return
-        }
-
-        val first = moves.random()
-        val second = moves.filter { it.id != first.id }.random()
-
-        currentMoveState.value = first
-        nextMoveState.value = second
-
-        // Speak NEXT move (not current)
-        announcer.announce(second.name, 120)
+    // Priority mode: linear weighting by smoothness (1..5)
+    val weighted = candidates.map { move ->
+        val conn = positive.firstOrNull { it.toId == move.id }
+        // Default 3 if no explicit smoothness, clamp to 1..5
+        val smooth = (conn?.smoothness ?: 3).coerceIn(1, 5)
+        move to smooth
     }
 
-    fun advanceToNext() {
-        val moves = movesState.value
-        val current = currentMoveState.value
-        val next = nextMoveState.value
-
-        if (moves.size < 2) {
-            currentMoveState.value = moves.firstOrNull()
-            nextMoveState.value = null
-            return
-        }
-
-        // If we don't yet have both moves, just pick fresh
-        if (current == null || next == null) {
-            pickTwoDistinctRandomMoves()
-            return
-        }
-
-        // Promote next -> current, pick a new next that is different
-        val newCurrent = next
-        val newNext = moves.filter { it.id != newCurrent.id }.random()
-
-        currentMoveState.value = newCurrent
-        nextMoveState.value = newNext
-
-        // Speak NEXT move
-        announcer.announce(newNext.name, 120)
+    val totalWeight = weighted.sumOf { it.second }
+    if (totalWeight <= 0) {
+        val chosen = candidates.random()
+        val conn = positive.firstOrNull { it.toId == chosen.id }
+        return chosen to conn?.notes
     }
 
-    fun rerollNext() {
-        val moves = movesState.value
-        val current = currentMoveState.value
-
-        if (moves.size < 2) {
-            return
+    var r = Random.nextInt(totalWeight) // 0 until totalWeight
+    for ((move, w) in weighted) {
+        if (r < w) {
+            val conn = positive.firstOrNull { it.toId == move.id }
+            return move to conn?.notes
         }
-
-        if (current == null) {
-            pickTwoDistinctRandomMoves()
-            return
-        }
-
-        // Pick a different next move than the current one
-        val newNext = moves.filter { it.id != current.id }.random()
-        nextMoveState.value = newNext
-
-        // Speak NEXT move
-        announcer.announce(newNext.name, 120)
+        r -= w
     }
 
-    // Initial pair on first composition
-    LaunchedEffect(Unit) {
-        if (currentMoveState.value == null && nextMoveState.value == null) {
-            pickTwoDistinctRandomMoves()
-        }
-    }
-
-    val currentMove = currentMoveState.value
-    val nextMove = nextMoveState.value
-
-    // Pointer handler for Bluetooth "mouse" and touch:
-    // - single tap/click  -> Next Move
-    // - double tap/click  -> Reroll
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        // Single click / tap => Next Move
-                        advanceToNext()
-                    },
-                    onDoubleTap = {
-                        // Double click / tap => Reroll
-                        rerollNext()
-                    }
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Current Move",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    Text(
-                        text = currentMove?.name ?: "—",
-                        fontSize = 20.sp,
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-
-                    Text(
-                        text = "Next Move",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    Text(
-                        text = nextMove?.name ?: "—",
-                        fontSize = 30.sp, // larger text for next move
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                }
-            }
-
-            Button(
-                onClick = { advanceToNext() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Next Move (single click)")
-            }
-
-            Button(
-                onClick = { rerollNext() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Reroll (double click)")
-            }
-
-            Text(
-                text = "Tip: Single click = Next, Double click = Reroll.\nTTS always speaks the NEXT move.",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
+    // Fallback (shouldn’t normally happen)
+    val last = weighted.last().first
+    val conn = positive.firstOrNull { it.toId == last.id }
+    return last to conn?.notes
 }
