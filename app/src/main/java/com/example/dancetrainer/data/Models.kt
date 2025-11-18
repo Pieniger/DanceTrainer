@@ -8,13 +8,15 @@ data class Move(
 
 /**
  * works == true  → this transition is allowed and has a smoothness rating + optional notes
- * works == false → this transition is known NOT to work
+ * works == false → this transition is known NOT to work; smoothness is ignored
+ *
+ * smoothness is always in 1..5 (clamped when loading).
  */
 data class Connection(
     val fromId: String,
     val toId: String,
     var works: Boolean,
-    var smoothness: Int = 0,      // only meaningful if works == true
+    var smoothness: Int = 3,      // default mid-value in 1..5
     var notes: String = ""
 )
 
