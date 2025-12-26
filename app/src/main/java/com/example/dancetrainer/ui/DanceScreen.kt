@@ -1,13 +1,20 @@
+package com.example.dancetrainer.ui
+
+import kotlin.random.Random
+import com.example.dancetrainer.data.Move
+import com.example.dancetrainer.data.Connection
+
 /**
  * Choose the next move from [from] using [connections].
  *
- * - Excludes:
- *   - [from] itself
- *   - any moves with a *negative* connection (works == false)
- * - If [priorityMode] is false → uniform random.
- * - If [priorityMode] is true  → weighted by smoothness (1..5).
+ * Rules:
+ * - ONLY considers connections where:
+ *   - fromId == from.id
+ *   - works == true
+ * - If priorityMode == false → uniform random among valid connections
+ * - If priorityMode == true  → weighted random by smoothness (1..5, linear)
  *
- * Returns Pair(nextMove, connectionNote).
+ * Returns Pair(nextMove, connectionNote)
  */
 private fun pickNextMove(
     moves: List<Move>,
@@ -15,52 +22,53 @@ private fun pickNextMove(
     from: Move,
     priorityMode: Boolean
 ): Pair<Move?, String?> {
-    if (moves.size < 2) return null to null
 
-    val positive = connections.filter { it.fromId == from.id && it.works }
-    val negativeTargets = connections
-        .filter { it.fromId == from.id && !it.works }
-        .map { it.toId }
-        .toSet()
-
-    val candidates = moves.filter { m ->
-        m.id != from.id && m.id !in negativeTargets
+    // All valid outgoing connections
+    val positiveConnections = connections.filter {
+        it.fromId == from.id && it.works
     }
-    if (candidates.isEmpty()) return null to null
 
-    // No priority mode → plain random
+    if (positiveConnections.isEmpty()) {
+        return null to null
+    }
+
+    // Resolve connections → actual moves
+    val resolved = positiveConnections.mapNotNull { conn ->
+        val move = moves.firstOrNull { it.id == conn.toId }
+        move?.let { it to conn }
+    }
+
+    if (resolved.isEmpty()) {
+        return null to null
+    }
+
+    // No priority mode → uniform random
     if (!priorityMode) {
-        val chosen = candidates.random()
-        val conn = positive.firstOrNull { it.toId == chosen.id }
-        return chosen to conn?.notes
+        val (move, conn) = resolved.random()
+        return move to conn.notes
     }
 
-    // Priority mode: linear weighting by smoothness (1..5)
-    val weighted = candidates.map { move ->
-        val conn = positive.firstOrNull { it.toId == move.id }
-        // Default 3 if no explicit smoothness, clamp to 1..5
-        val smooth = (conn?.smoothness ?: 3).coerceIn(1, 5)
-        move to smooth
+    // Priority mode → linear weighting by smoothness (1..5)
+    val weighted = resolved.map { (move, conn) ->
+        val smoothness = conn.smoothness.coerceIn(1, 5)
+        Triple(move, conn, smoothness)
     }
 
-    val totalWeight = weighted.sumOf { it.second }
+    val totalWeight = weighted.sumOf { it.third }
     if (totalWeight <= 0) {
-        val chosen = candidates.random()
-        val conn = positive.firstOrNull { it.toId == chosen.id }
-        return chosen to conn?.notes
+        val (move, conn) = resolved.random()
+        return move to conn.notes
     }
 
-    var r = Random.nextInt(totalWeight) // 0 until totalWeight
-    for ((move, w) in weighted) {
-        if (r < w) {
-            val conn = positive.firstOrNull { it.toId == move.id }
-            return move to conn?.notes
+    var r = Random.nextInt(totalWeight)
+    for ((move, conn, weight) in weighted) {
+        if (r < weight) {
+            return move to conn.notes
         }
-        r -= w
+        r -= weight
     }
 
-    // Fallback (shouldn’t normally happen)
-    val last = weighted.last().first
-    val conn = positive.firstOrNull { it.toId == last.id }
-    return last to conn?.notes
+    // Fallback (should never happen)
+    val last = weighted.last()
+    return last.first to last.second.notes
 }
