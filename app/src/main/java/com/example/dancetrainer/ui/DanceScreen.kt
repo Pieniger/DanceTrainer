@@ -1,20 +1,83 @@
 package com.example.dancetrainer.ui
 
-import kotlin.random.Random
-import com.example.dancetrainer.data.Move
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.example.dancetrainer.data.Connection
+import com.example.dancetrainer.data.Move
+import com.example.dancetrainer.data.Prefs
+import com.example.dancetrainer.data.Storage
+import kotlin.random.Random
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DanceScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+
+    val priorityMode = Prefs.isPriorityMode(ctx)
+
+    var moves by remember { mutableStateOf(Storage.loadMoves(ctx)) }
+    var connections by remember { mutableStateOf(Storage.loadConnections(ctx)) }
+
+    var currentMove by remember { mutableStateOf<Move?>(moves.randomOrNull()) }
+    var note by remember { mutableStateOf<String?>(null) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Dance") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+
+            Text(
+                currentMove?.name ?: "No move",
+                style = MaterialTheme.typography.headlineMedium
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            if (!note.isNullOrBlank()) {
+                Text(note!!, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Button(onClick = {
+                val (next, n) = pickNextMove(
+                    moves = moves,
+                    connections = connections,
+                    from = currentMove ?: return@Button,
+                    priorityMode = priorityMode
+                )
+                currentMove = next
+                note = n
+            }) {
+                Text("Next move")
+            }
+        }
+    }
+}
 
 /**
- * Choose the next move from [from] using [connections].
- *
- * Rules:
- * - ONLY considers connections where:
- *   - fromId == from.id
- *   - works == true
- * - If priorityMode == false → uniform random among valid connections
- * - If priorityMode == true  → weighted random by smoothness (1..5, linear)
- *
- * Returns Pair(nextMove, connectionNote)
+ * Choose next move:
+ * - excludes same move
+ * - excludes connections where works == false
+ * - priority mode weights by smoothness (1–5)
  */
 private fun pickNextMove(
     moves: List<Move>,
@@ -23,52 +86,47 @@ private fun pickNextMove(
     priorityMode: Boolean
 ): Pair<Move?, String?> {
 
-    // All valid outgoing connections
-    val positiveConnections = connections.filter {
-        it.fromId == from.id && it.works
+    val blocked = connections
+        .filter { it.fromId == from.id && !it.works }
+        .map { it.toId }
+        .toSet()
+
+    val positive = connections.filter { it.fromId == from.id && it.works }
+
+    val candidates = moves.filter {
+        it.id != from.id && it.id !in blocked
     }
 
-    if (positiveConnections.isEmpty()) {
-        return null to null
-    }
+    if (candidates.isEmpty()) return null to null
 
-    // Resolve connections → actual moves
-    val resolved = positiveConnections.mapNotNull { conn ->
-        val move = moves.firstOrNull { it.id == conn.toId }
-        move?.let { it to conn }
-    }
-
-    if (resolved.isEmpty()) {
-        return null to null
-    }
-
-    // No priority mode → uniform random
     if (!priorityMode) {
-        val (move, conn) = resolved.random()
-        return move to conn.notes
+        val chosen = candidates.random()
+        val conn = positive.firstOrNull { it.toId == chosen.id }
+        return chosen to conn?.notes
     }
 
-    // Priority mode → linear weighting by smoothness (1..5)
-    val weighted = resolved.map { (move, conn) ->
-        val smoothness = conn.smoothness.coerceIn(1, 5)
-        Triple(move, conn, smoothness)
+    // linear weighting: 1–5
+    val weighted = candidates.map { move ->
+        val smooth = positive
+            .firstOrNull { it.toId == move.id }
+            ?.smoothness
+            ?.coerceIn(1, 5)
+            ?: 3
+        move to smooth
     }
 
-    val totalWeight = weighted.sumOf { it.third }
-    if (totalWeight <= 0) {
-        val (move, conn) = resolved.random()
-        return move to conn.notes
-    }
+    val total = weighted.sumOf { it.second }
+    var r = Random.nextInt(total)
 
-    var r = Random.nextInt(totalWeight)
-    for ((move, conn, weight) in weighted) {
-        if (r < weight) {
-            return move to conn.notes
+    for ((move, w) in weighted) {
+        if (r < w) {
+            val conn = positive.firstOrNull { it.toId == move.id }
+            return move to conn?.notes
         }
-        r -= weight
+        r -= w
     }
 
-    // Fallback (should never happen)
-    val last = weighted.last()
-    return last.first to last.second.notes
+    val fallback = weighted.last().first
+    val conn = positive.firstOrNull { it.toId == fallback.id }
+    return fallback to conn?.notes
 }
