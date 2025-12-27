@@ -9,7 +9,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.dancetrainer.data.Connection
 import com.example.dancetrainer.data.Move
-import com.example.dancetrainer.data.Prefs
 import com.example.dancetrainer.data.Storage
 import kotlin.random.Random
 
@@ -18,12 +17,13 @@ import kotlin.random.Random
 fun DanceScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
 
-    val priorityMode = Prefs.isPriorityMode(ctx)
+    // Priority mode temporarily disabled (no Prefs dependency)
+    val priorityMode = false
 
     var moves by remember { mutableStateOf(Storage.loadMoves(ctx)) }
     var connections by remember { mutableStateOf(Storage.loadConnections(ctx)) }
 
-    var currentMove by remember { mutableStateOf<Move?>(moves.randomOrNull()) }
+    var currentMove by remember { mutableStateOf(moves.randomOrNull()) }
     var note by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -105,7 +105,6 @@ private fun pickNextMove(
         return chosen to conn?.notes
     }
 
-    // linear weighting: 1–5
     val weighted = candidates.map { move ->
         val smooth = positive
             .firstOrNull { it.toId == move.id }
