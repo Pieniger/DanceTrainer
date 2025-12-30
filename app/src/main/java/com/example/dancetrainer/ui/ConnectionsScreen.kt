@@ -1,5 +1,6 @@
 package com.example.dancetrainer.ui
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,17 +19,24 @@ import com.example.dancetrainer.data.Storage
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionsScreen(onBack: () -> Unit) {
+
     val ctx = LocalContext.current
 
     var moves by remember { mutableStateOf(Storage.loadMoves(ctx)) }
     var connections by remember { mutableStateOf(Storage.loadConnections(ctx)) }
 
     val movesById = remember(moves) { moves.associateBy { it.id } }
+
     var selectedMove by remember { mutableStateOf<Move?>(null) }
 
-    var editing by remember { mutableStateOf<Connection?>(null) }
-    var smoothText by remember { mutableStateOf(TextFieldValue("")) }
-    var notesText by remember { mutableStateOf(TextFieldValue("")) }
+    var editingConnection by remember { mutableStateOf<Connection?>(null) }
+    var editSmoothnessText by remember { mutableStateOf(TextFieldValue("")) }
+    var editNotesText by remember { mutableStateOf(TextFieldValue("")) }
+
+    fun saveConnections(ctx: Context, updated: List<Connection>) {
+        Storage.saveConnections(ctx, updated)
+        connections = updated
+    }
 
     Scaffold(
         topBar = {
@@ -40,17 +48,23 @@ fun ConnectionsScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
+
         Row(
             modifier = Modifier
                 .padding(padding)
-                .padding(12.dp)
+                .padding(16.dp)
                 .fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ---- MOVES ----
-            Card(Modifier.weight(1f)) {
-                LazyColumn(Modifier.padding(8.dp)) {
+            // LEFT — Moves
+            Card(
+                modifier = Modifier.weight(1f).fillMaxHeight()
+            ) {
+                LazyColumn(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     items(moves, key = { it.id }) { move ->
                         Text(
                             text = move.name,
@@ -58,49 +72,90 @@ fun ConnectionsScreen(onBack: () -> Unit) {
                                 .fillMaxWidth()
                                 .clickable { selectedMove = move }
                                 .padding(8.dp),
-                            style = if (move == selectedMove)
+                            style = if (move.id == selectedMove?.id)
                                 MaterialTheme.typography.titleMedium
-                            else MaterialTheme.typography.bodyMedium
+                            else
+                                MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
             }
 
-            // ---- CONNECTIONS ----
-            Card(Modifier.weight(2f)) {
+            // RIGHT — Connections
+            Card(
+                modifier = Modifier.weight(2f).fillMaxHeight()
+            ) {
                 if (selectedMove == null) {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Text("Select a move")
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Select a move to see connections")
                     }
                 } else {
                     val move = selectedMove!!
-                    val outgoing = connections.filter { it.fromId == move.id }
-                    val incoming = connections.filter { it.toId == move.id }
 
-                    Column(Modifier.padding(12.dp)) {
-                        Text("From ${move.name}", style = MaterialTheme.typography.titleMedium)
+                    // ✅ ONLY POSITIVE CONNECTIONS
+                    val outgoing = connections.filter {
+                        it.works && it.fromId == move.id
+                    }
+                    val incoming = connections.filter {
+                        it.works && it.toId == move.id
+                    }
 
-                        Spacer(Modifier.height(8.dp))
-                        Text("Leads to")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
 
-                        outgoing.forEach { c ->
-                            val name = movesById[c.toId]?.name ?: c.toId
-                            ConnectionRow("→ $name", c) {
-                                editing = c
-                                smoothText = TextFieldValue(c.smoothness.toString())
-                                notesText = TextFieldValue(c.notes)
+                        Text(
+                            "Connections for ${move.name}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Text("Leads to:", style = MaterialTheme.typography.titleSmall)
+                        if (outgoing.isEmpty()) {
+                            Text("No outgoing connections", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            outgoing.forEach { conn ->
+                                val target = movesById[conn.toId]
+                                ConnectionRow(
+                                    label = "→ ${target?.name ?: conn.toId}",
+                                    smoothness = conn.smoothness.coerceIn(1, 5),
+                                    notes = conn.notes,
+                                    onClick = {
+                                        editingConnection = conn
+                                        editSmoothnessText =
+                                            TextFieldValue(conn.smoothness.toString())
+                                        editNotesText =
+                                            TextFieldValue(conn.notes)
+                                    }
+                                )
                             }
                         }
 
-                        Divider(Modifier.padding(vertical = 8.dp))
-                        Text("Comes from")
+                        Divider()
 
-                        incoming.forEach { c ->
-                            val name = movesById[c.fromId]?.name ?: c.fromId
-                            ConnectionRow("← $name", c) {
-                                editing = c
-                                smoothText = TextFieldValue(c.smoothness.toString())
-                                notesText = TextFieldValue(c.notes)
+                        Text("Comes from:", style = MaterialTheme.typography.titleSmall)
+                        if (incoming.isEmpty()) {
+                            Text("No incoming connections", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            incoming.forEach { conn ->
+                                val source = movesById[conn.fromId]
+                                ConnectionRow(
+                                    label = "← ${source?.name ?: conn.fromId}",
+                                    smoothness = conn.smoothness.coerceIn(1, 5),
+                                    notes = conn.notes,
+                                    onClick = {
+                                        editingConnection = conn
+                                        editSmoothnessText =
+                                            TextFieldValue(conn.smoothness.toString())
+                                        editNotesText =
+                                            TextFieldValue(conn.notes)
+                                    }
+                                )
                             }
                         }
                     }
@@ -109,42 +164,53 @@ fun ConnectionsScreen(onBack: () -> Unit) {
         }
     }
 
-    // ---- EDIT DIALOG ----
-    editing?.let { conn ->
+    // EDIT DIALOG
+    editingConnection?.let { conn ->
+
         AlertDialog(
-            onDismissRequest = { editing = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    val updated = connections.map {
-                        if (it === conn)
-                            it.copy(
-                                smoothness = smoothText.text.toIntOrNull()?.coerceIn(1, 5)
-                                    ?: it.smoothness,
-                                notes = notesText.text
-                            )
-                        else it
-                    }
-                    Storage.saveConnections(ctx, updated)
-                    connections = updated
-                    editing = null
-                }) { Text("Save") }
+            onDismissRequest = { editingConnection = null },
+            title = {
+                val from = movesById[conn.fromId]?.name ?: conn.fromId
+                val to = movesById[conn.toId]?.name ?: conn.toId
+                Text("$from → $to")
             },
-            dismissButton = {
-                TextButton(onClick = { editing = null }) { Text("Cancel") }
-            },
-            title = { Text("Edit connection") },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = smoothText,
-                        onValueChange = { smoothText = it },
+                        value = editSmoothnessText,
+                        onValueChange = { editSmoothnessText = it },
                         label = { Text("Smoothness (1–5)") }
                     )
                     OutlinedTextField(
-                        value = notesText,
-                        onValueChange = { notesText = it },
-                        label = { Text("Notes") }
+                        value = editNotesText,
+                        onValueChange = { editNotesText = it },
+                        label = { Text("Note") }
                     )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val smooth = editSmoothnessText.text
+                        .toIntOrNull()
+                        ?.coerceIn(1, 5)
+                        ?: conn.smoothness
+
+                    val updated = connections.map {
+                        if (it === conn) it.copy(
+                            smoothness = smooth,
+                            notes = editNotesText.text
+                        ) else it
+                    }
+
+                    saveConnections(ctx, updated)
+                    editingConnection = null
+                }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingConnection = null }) {
+                    Text("Cancel")
                 }
             }
         )
@@ -154,18 +220,20 @@ fun ConnectionsScreen(onBack: () -> Unit) {
 @Composable
 private fun ConnectionRow(
     label: String,
-    conn: Connection,
+    smoothness: Int,
+    notes: String,
     onClick: () -> Unit
 ) {
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(6.dp)
+            .padding(vertical = 4.dp)
     ) {
-        Text(label)
-        Text("Smoothness: ${conn.smoothness}", style = MaterialTheme.typography.bodySmall)
-        if (conn.notes.isNotBlank())
-            Text(conn.notes, style = MaterialTheme.typography.bodySmall)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text("Smoothness: $smoothness", style = MaterialTheme.typography.bodySmall)
+        if (notes.isNotBlank()) {
+            Text(notes, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
